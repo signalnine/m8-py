@@ -31,6 +31,10 @@ class VersionCapabilities:
     has_external: bool
     has_eq: bool
     has_expanded_eq: bool
+    has_limiter_settings: bool
+    has_mfx_kind: bool
+    has_ott: bool
+    has_reverb_shimmer: bool
 
     @staticmethod
     def from_version(v: M8Version) -> VersionCapabilities:
@@ -41,6 +45,10 @@ class VersionCapabilities:
             has_external=v.at_least(3, 0),
             has_eq=v.at_least(4, 0),
             has_expanded_eq=v.at_least(4, 1),
+            has_limiter_settings=v.at_least(6, 0),
+            has_mfx_kind=v.at_least(6, 1),
+            has_ott=v.at_least(6, 1),
+            has_reverb_shimmer=v.at_least(6, 1),
         )
 
 

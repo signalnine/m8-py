@@ -4,10 +4,13 @@ from m8py.models.version import M8Version
 from m8py.models.settings import (
     MIDISettings, MixerSettings, EffectsSettings,
     ChorusSettings, DelaySettings, ReverbSettings,
+    OTTSettings,
 )
 from m8py.models.midi import MIDIMapping
 
 V41 = M8Version(4, 1, 0)
+V60 = M8Version(6, 0, 0)
+V62 = M8Version(6, 1, 0)
 
 
 class TestMIDISettings:
@@ -54,8 +57,43 @@ class TestMixerSettings:
     def test_default_size(self):
         w = M8FileWriter()
         MixerSettings().write(w)
-        # 2 + 8 + 3 + 2 + 1 + 2 + 2 + 2 + 3 + 3 + 4 = 32
+        # 2 + 8 + 3 + 2 + 1 + 6 + 3 + 3 + 4 = 32
         assert len(w.to_bytes()) == 32
+
+    def test_analog_sends_byte_order(self):
+        """Analog sends are grouped by channel (L then R), not by effect.
+
+        Firmware reads: L.mfx, L.delay, L.reverb, R.mfx, R.delay, R.reverb.
+        Verified against v6.5.1G firmware and Rust m8-file-parser crate.
+        """
+        ms = MixerSettings(
+            analog_input_l_chorus=0x11,
+            analog_input_l_delay=0x22,
+            analog_input_l_reverb=0x33,
+            analog_input_r_chorus=0x44,
+            analog_input_r_delay=0x55,
+            analog_input_r_reverb=0x66,
+        )
+        w = M8FileWriter()
+        ms.write(w)
+        data = w.to_bytes()
+        # Bytes 16-21: L.mfx, L.delay, L.reverb, R.mfx, R.delay, R.reverb
+        assert data[16:22] == bytes([0x11, 0x22, 0x33, 0x44, 0x55, 0x66])
+
+    def test_analog_sends_roundtrip(self):
+        ms = MixerSettings(
+            analog_input_l_chorus=10, analog_input_l_delay=20, analog_input_l_reverb=30,
+            analog_input_r_chorus=40, analog_input_r_delay=50, analog_input_r_reverb=60,
+        )
+        w = M8FileWriter()
+        ms.write(w)
+        ms2 = MixerSettings.from_reader(M8FileReader(w.to_bytes()))
+        assert ms2.analog_input_l_chorus == 10
+        assert ms2.analog_input_l_delay == 20
+        assert ms2.analog_input_l_reverb == 30
+        assert ms2.analog_input_r_chorus == 40
+        assert ms2.analog_input_r_delay == 50
+        assert ms2.analog_input_r_reverb == 60
 
 
 class TestEffectsSettings:
@@ -140,3 +178,102 @@ class TestMIDIMapping:
         assert hasattr(m, "instr_index")
         assert not hasattr(m, "value")  # old name, was wrong
         assert not hasattr(m, "typ")    # old name, was wrong
+
+
+class TestMixerSettingsV6:
+    def test_v60_limiter_roundtrip(self):
+        ms = MixerSettings(
+            master_volume=200, master_limit=128,
+            limiter_attack=50, limiter_release=80, limiter_soft_clip=1,
+        )
+        w = M8FileWriter()
+        ms.write(w, V60)
+        ms2 = MixerSettings.from_reader(M8FileReader(w.to_bytes()), V60)
+        assert ms2.master_volume == 200
+        assert ms2.master_limit == 128
+        assert ms2.limiter_attack == 50
+        assert ms2.limiter_release == 80
+        assert ms2.limiter_soft_clip == 1
+        assert ms2.ott_level == 0  # not present in v6.0
+
+    def test_v62_ott_roundtrip(self):
+        ms = MixerSettings(
+            master_volume=200, master_limit=128,
+            limiter_attack=50, limiter_release=80, limiter_soft_clip=1,
+            ott_level=42,
+        )
+        w = M8FileWriter()
+        ms.write(w, V62)
+        ms2 = MixerSettings.from_reader(M8FileReader(w.to_bytes()), V62)
+        assert ms2.limiter_attack == 50
+        assert ms2.limiter_release == 80
+        assert ms2.limiter_soft_clip == 1
+        assert ms2.ott_level == 42
+
+    def test_v41_regression(self):
+        """v4.1 should still work without limiter/ott fields."""
+        ms = MixerSettings(master_volume=180, dj_filter=64)
+        w = M8FileWriter()
+        ms.write(w, V41)
+        ms2 = MixerSettings.from_reader(M8FileReader(w.to_bytes()), V41)
+        assert ms2.master_volume == 180
+        assert ms2.dj_filter == 64
+        assert ms2.limiter_attack == 0
+        assert ms2.ott_level == 0
+
+    def test_v60_write_size(self):
+        w = M8FileWriter()
+        MixerSettings().write(w, V60)
+        # 28 base + 3 limiter = 31
+        assert len(w.to_bytes()) == 31
+
+    def test_v62_write_size(self):
+        w = M8FileWriter()
+        MixerSettings().write(w, V62)
+        # 28 base + 3 limiter + 1 ott = 32
+        assert len(w.to_bytes()) == 32
+
+
+class TestEffectsSettingsV6:
+    def test_v62_shimmer_ott_mfx_roundtrip(self):
+        es = EffectsSettings(
+            shimmer=42,
+            ott=OTTSettings(time=100, color=200),
+            mfx_kind=2,  # Flanger
+        )
+        w = M8FileWriter()
+        es.write(w, V62)
+        es2 = EffectsSettings.from_reader(M8FileReader(w.to_bytes()), V62)
+        assert es2.shimmer == 42
+        assert es2.ott is not None
+        assert es2.ott.time == 100
+        assert es2.ott.color == 200
+        assert es2.mfx_kind == 2
+
+    def test_v41_no_shimmer_ott(self):
+        es = EffectsSettings()
+        w = M8FileWriter()
+        es.write(w, V41)
+        es2 = EffectsSettings.from_reader(M8FileReader(w.to_bytes()), V41)
+        assert es2.shimmer == 0
+        assert es2.ott is None
+        assert es2.mfx_kind == 0
+
+    def test_v62_write_size(self):
+        w = M8FileWriter()
+        es = EffectsSettings(ott=OTTSettings())
+        es.write(w, V62)
+        # 22 base + 1 shimmer + 2 ott + 1 mfx_kind = 26
+        assert len(w.to_bytes()) == 26
+
+    def test_v41_regression_roundtrip(self):
+        es = EffectsSettings()
+        es.chorus.mod_depth = 42
+        es.delay.feedback = 100
+        es.reverb.width = 200
+        w = M8FileWriter()
+        es.write(w, V41)
+        es2 = EffectsSettings.from_reader(M8FileReader(w.to_bytes()), V41)
+        assert es2.chorus.mod_depth == 42
+        assert es2.delay.feedback == 100
+        assert es2.reverb.width == 200

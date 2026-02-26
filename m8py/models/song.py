@@ -58,7 +58,7 @@ class Song:
         midi_settings = MIDISettings.from_reader(reader)
         key = reader.read()
         reader.skip(18)  # reserved
-        mixer_settings = MixerSettings.from_reader(reader)
+        mixer_settings = MixerSettings.from_reader(reader, version)
 
         # Seek-based sections
         reader.seek(offsets.groove)
@@ -137,7 +137,7 @@ class Song:
         self.midi_settings.write(writer)
         writer.write(self.key)
         writer.pad(18)  # reserved
-        self.mixer_settings.write(writer)
+        self.mixer_settings.write(writer, version)
 
         # Pad to groove offset
         _pad_to(writer, offsets.groove)
@@ -165,7 +165,7 @@ class Song:
             write_instrument(inst, writer)
 
         writer.pad(3)  # padding after instruments
-        self.effects_settings.write(writer)
+        self.effects_settings.write(writer, version)
 
         _pad_to(writer, offsets.midi_mapping)
         for m in self.midi_mappings:

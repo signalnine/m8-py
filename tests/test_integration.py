@@ -155,3 +155,59 @@ class TestIntegration:
         assert M8FileReader is not None
         assert Song is not None
         assert SongBuilder is not None
+
+    def test_display_imports(self):
+        """Verify display functions are importable from top-level."""
+        assert hasattr(m8py, 'note_name')
+        assert hasattr(m8py, 'fx_command_name')
+        assert hasattr(m8py, 'format_fx')
+        assert hasattr(m8py, 'render_phrase')
+        assert hasattr(m8py, 'render_song_overview')
+
+    def test_display_subpackage_imports(self):
+        """Verify display subpackage exports work."""
+        from m8py.display import (
+            note_name, shape_name, filter_name,
+            fx_command_name, format_fx,
+            render_phrase, render_chain, render_table,
+            render_song_grid, render_instrument_summary, render_song_overview,
+        )
+        assert note_name is not None
+        assert fx_command_name is not None
+        assert render_phrase is not None
+
+
+class TestDisplayIntegration:
+    def test_render_composed_song(self):
+        """Compose a song and render its overview."""
+        from m8py.display import render_song_overview, render_phrase
+        song = compose(
+            tracks=[
+                TrackDef(
+                    instrument=WavSynth(common=SynthCommon(name="Test")),
+                    pattern="C4 E4 G4 C5",
+                    track=0,
+                ),
+            ],
+            name="RenderTest",
+            tempo=120.0,
+        )
+        overview = render_song_overview(song)
+        assert "Song: RenderTest" in overview
+        assert "WAVSYNTH" in overview
+        assert "Test" in overview
+
+        # Render the first used phrase
+        phrase_idx = song.chains[0].steps[0].phrase
+        phrase_text = render_phrase(song.phrases[phrase_idx])
+        assert "C-5" in phrase_text  # C4 in M8 octave numbering = C-5
+
+    def test_fx_lookup_in_context(self):
+        """Test FX command lookup with version context."""
+        from m8py.display import fx_command_name
+        # v4 command
+        assert fx_command_name(0x00, version=(4, 0)) == "ARP"
+        # v6.2 new command
+        assert fx_command_name(0x4A, version=(6, 1)) == "OTT"
+        # Empty
+        assert fx_command_name(0xFF) == "---"

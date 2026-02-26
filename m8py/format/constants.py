@@ -58,7 +58,85 @@ class LfoTriggerMode(IntEnum):
 class SamplePlayMode(IntEnum):
     FWD = 0; REV = 1; FWDLOOP = 2; REVLOOP = 3
     FWD_PP = 4; REV_PP = 5; OSC = 6; OSC_REV = 7; OSC_PP = 8
+    REPITCH = 9; REP_REV = 10; REP_PP = 11
+    REP_BPM = 12; BPM_REV = 13; BPM_PP = 14
 
 class LimitType(IntEnum):
     CLIP = 0; SIN = 1; FOLD = 2; WRAP = 3
-    POST = 4; POSTAD = 5; POST_W1 = 6; POST_W2 = 7
+    POST = 4; POSTAD = 5; POST_W1 = 6; POST_W2 = 7; POST_W3 = 8
+
+class WavSynthShape(IntEnum):
+    PULSE12 = 0; PULSE25 = 1; PULSE50 = 2; PULSE75 = 3
+    SAW = 4; TRIANGLE = 5; SINE = 6
+    NOISE_PITCHED = 7; NOISE = 8
+    WT_CRUSH = 9; WT_FOLDING = 10; WT_FREQ = 11; WT_FUZZY = 12
+    WT_GHOST = 13; WT_GRAPHIC = 14; WT_LFOPLAY = 15; WT_LIQUID = 16
+    WT_MORPHING = 17; WT_MYSTIC = 18; WT_STICKY = 19; WT_TIDAL = 20
+    WT_TIDY = 21; WT_TUBE = 22; WT_UMBRELLA = 23; WT_UNWIND = 24
+    WT_VIRAL = 25; WT_WAVES = 26; WT_DRIP = 27; WT_FROGGY = 28
+    WT_INSONIC = 29; WT_RADIUS = 30; WT_SCRATCH = 31; WT_SMOOTH = 32
+    WT_WOBBLE = 33; WT_ASIMMTRY = 34; WT_BLEEN = 35; WT_FRACTAL = 36
+    WT_GENTLE = 37; WT_HARMONIC = 38; WT_HYPNOTIC = 39; WT_ITERATIV = 40
+    WT_MICROWAV = 41; WT_PLAITS01 = 42; WT_PLAITS02 = 43; WT_RISEFALL = 44
+    WT_TONAL = 45; WT_TWINE = 46; WT_ALIEN = 47; WT_CYBERNET = 48
+    WT_DISORDR = 49; WT_FORMANT = 50; WT_HYPER = 51; WT_JAGGED = 52
+    WT_MIXED = 53; WT_MULTIPLY = 54; WT_NOWHERE = 55; WT_PINBALL = 56
+    WT_RINGS = 57; WT_SHIMMER = 58; WT_SPECTRAL = 59; WT_SPOOKY = 60
+    WT_TRANSFRM = 61; WT_TWISTED = 62; WT_VOCAL = 63; WT_WASHED = 64
+    WT_WONDER = 65; WT_WOWEE = 66; WT_ZAP = 67; WT_BRAIDS = 68
+    WT_VOXSYNTH = 69
+
+class MacroSynthShape(IntEnum):
+    CSAW = 0; MORPH = 1; SAW_SQUARE = 2; SINE_TRIANGLE = 3
+    BUZZ = 4; SQUARE_SUB = 5; SAW_SUB = 6; SQUARE_SYNC = 7
+    SAW_SYNC = 8; TRIPLE_SAW = 9; TRIPLE_SQUARE = 10; TRIPLE_TRIANGLE = 11
+    TRIPLE_SIN = 12; TRIPLE_RNG = 13; SAW_SWARM = 14; SAW_COMB = 15
+    TOY = 16; DIGITAL_FILTER_LP = 17; DIGITAL_FILTER_PK = 18
+    DIGITAL_FILTER_BP = 19; DIGITAL_FILTER_HP = 20; VOSIM = 21
+    VOWEL = 22; VOWEL_FOF = 23; HARMONICS = 24; FM = 25
+    FEEDBACK_FM = 26; CHAOTIC_FEEDBACK_FM = 27; PLUCKED = 28
+    BOWED = 29; BLOWN = 30; FLUTED = 31; STRUCK_BELL = 32
+    STRUCK_DRUM = 33; KICK = 34; CYMBAL = 35; SNARE = 36
+    WAVETABLES = 37; WAVE_MAP = 38; WAV_LINE = 39; WAV_PARAPHONIC = 40
+    FILTERED_NOISE = 41; TWIN_PEAKS_NOISE = 42; CLOCKED_NOISE = 43
+    GRANULAR_CLOUD = 44; PARTICLE_NOISE = 45; DIGITAL_MOD = 46
+    MORSE_NOISE = 47
+
+class FMAlgorithm(IntEnum):
+    A_B_C_D = 0          # A>B>C>D
+    AB_C_D = 1           # [A+B]>C>D
+    ABC_D = 2            # [A>B+C]>D
+    ABAC_D = 3           # [A>B+A>C]>D
+    SUM_ABC_D = 4        # [A+B+C]>D
+    ABC_PLUS_D = 5       # [A>B>C]+D
+    ABC_ABD = 6          # [A>B>C]+[A>B>D]
+    AB_CD = 7            # [A>B]+[C>D]
+    AB_AC_AD = 8         # [A>B]+[A>C]+[A>D]
+    AB_AC_D = 9          # [A>B]+[A>C]+D
+    AB_C_PLUS_D = 10     # [A>B]+C+D
+    FULL_SUM = 11        # A+B+C+D
+
+class FMOperatorShape(IntEnum):
+    SIN = 0; SW2 = 1; SW3 = 2; SW4 = 3; SW5 = 4; SW6 = 5
+    TRI = 6; SAW = 7; SQR = 8; PUL = 9; IMP = 10
+    NOI = 11; NLP = 12; NHP = 13; NBP = 14; CLK = 15
+    W09 = 16; W0A = 17; W0B = 18; W0C = 19; W0D = 20; W0E = 21
+    W0F = 22; W10 = 23; W11 = 24; W12 = 25; W13 = 26; W14 = 27
+    W15 = 28; W16 = 29; W17 = 30; W18 = 31; W19 = 32; W1A = 33
+    W1B = 34; W1C = 35; W1D = 36; W1E = 37; W1F = 38; W20 = 39
+    W21 = 40; W22 = 41; W23 = 42; W24 = 43; W25 = 44; W26 = 45
+    W27 = 46; W28 = 47; W29 = 48; W2A = 49; W2B = 50; W2C = 51
+    W2D = 52; W2E = 53; W2F = 54; W30 = 55; W31 = 56; W32 = 57
+    W33 = 58; W34 = 59; W35 = 60; W36 = 61; W37 = 62; W38 = 63
+    W39 = 64; W3A = 65; W3B = 66; W3C = 67; W3D = 68; W3E = 69
+    W3F = 70; W40 = 71; W41 = 72; W42 = 73; W43 = 74; W44 = 75
+    W45 = 76
+
+class FilterType(IntEnum):
+    OFF = 0; LOWPASS = 1; HIGHPASS = 2; BANDPASS = 3
+    BANDSTOP = 4; LP_HP = 5; ZDF_LP = 6; ZDF_HP = 7
+
+class WavSynthFilterType(IntEnum):
+    OFF = 0; LOWPASS = 1; HIGHPASS = 2; BANDPASS = 3
+    BANDSTOP = 4; LP_HP = 5; ZDF_LP = 6; ZDF_HP = 7
+    WAV_LP = 8; WAV_HP = 9; WAV_BP = 10; WAV_BS = 11

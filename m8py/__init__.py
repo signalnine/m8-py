@@ -13,6 +13,10 @@ from m8py.models.scale import Scale
 from m8py.compose.builder import SongBuilder
 from m8py.compose.declarative import compose, TrackDef
 from m8py.compose.samples import export_to_sdcard
+from m8py.display import (
+    note_name, fx_command_name, format_fx,
+    render_phrase, render_song_overview,
+)
 
 __all__ = [
     # I/O
@@ -26,4 +30,7 @@ __all__ = [
     "External", "MIDIOut", "EmptyInstrument", "SynthCommon", "Instrument",
     # Composition
     "SongBuilder", "compose", "TrackDef", "export_to_sdcard",
+    # Display
+    "note_name", "fx_command_name", "format_fx",
+    "render_phrase", "render_song_overview",
 ]

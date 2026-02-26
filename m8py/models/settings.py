@@ -67,18 +67,26 @@ class MixerSettings:
     reverb_volume: int = 0
     analog_input_volume: list[int] = field(default_factory=lambda: [0, 0])
     usb_input_volume: int = 0
-    analog_input_chorus: list[int] = field(default_factory=lambda: [0, 0])
-    analog_input_delay: list[int] = field(default_factory=lambda: [0, 0])
-    analog_input_reverb: list[int] = field(default_factory=lambda: [0, 0])
+    # Analog sends grouped by channel (L then R), each: mfx, delay, reverb
+    analog_input_l_chorus: int = 0
+    analog_input_l_delay: int = 0
+    analog_input_l_reverb: int = 0
+    analog_input_r_chorus: int = 0
+    analog_input_r_delay: int = 0
+    analog_input_r_reverb: int = 0
     usb_input_chorus: int = 0
     usb_input_delay: int = 0
     usb_input_reverb: int = 0
     dj_filter: int = 0
     dj_peak: int = 0
     dj_filter_type: int = 0
+    limiter_attack: int = 0
+    limiter_release: int = 0
+    limiter_soft_clip: int = 0
+    ott_level: int = 0
 
     @staticmethod
-    def from_reader(reader: M8FileReader) -> MixerSettings:
+    def from_reader(reader: M8FileReader, version: M8Version | None = None) -> MixerSettings:
         ms = MixerSettings(
             master_volume=reader.read(),
             master_limit=reader.read(),
@@ -88,9 +96,13 @@ class MixerSettings:
             reverb_volume=reader.read(),
             analog_input_volume=[reader.read(), reader.read()],
             usb_input_volume=reader.read(),
-            analog_input_chorus=[reader.read(), reader.read()],
-            analog_input_delay=[reader.read(), reader.read()],
-            analog_input_reverb=[reader.read(), reader.read()],
+            # Analog sends: L channel (mfx, delay, reverb), then R channel
+            analog_input_l_chorus=reader.read(),
+            analog_input_l_delay=reader.read(),
+            analog_input_l_reverb=reader.read(),
+            analog_input_r_chorus=reader.read(),
+            analog_input_r_delay=reader.read(),
+            analog_input_r_reverb=reader.read(),
             usb_input_chorus=reader.read(),
             usb_input_delay=reader.read(),
             usb_input_reverb=reader.read(),
@@ -98,10 +110,18 @@ class MixerSettings:
             dj_peak=reader.read(),
             dj_filter_type=reader.read(),
         )
-        reader.skip(4)  # padding
+        caps = version.caps if version is not None else None
+        if caps is not None and caps.has_limiter_settings:
+            ms.limiter_attack = reader.read()
+            ms.limiter_release = reader.read()
+            ms.limiter_soft_clip = reader.read()
+        if caps is not None and caps.has_ott:
+            ms.ott_level = reader.read()
+        if caps is None or not caps.has_limiter_settings:
+            reader.skip(4)  # padding (pre-v6.0)
         return ms
 
-    def write(self, writer: M8FileWriter) -> None:
+    def write(self, writer: M8FileWriter, version: M8Version | None = None) -> None:
         writer.write(self.master_volume)
         writer.write(self.master_limit)
         for v in self.track_volume:
@@ -112,19 +132,28 @@ class MixerSettings:
         for v in self.analog_input_volume:
             writer.write(v)
         writer.write(self.usb_input_volume)
-        for v in self.analog_input_chorus:
-            writer.write(v)
-        for v in self.analog_input_delay:
-            writer.write(v)
-        for v in self.analog_input_reverb:
-            writer.write(v)
+        # Analog sends: L channel (mfx, delay, reverb), then R channel
+        writer.write(self.analog_input_l_chorus)
+        writer.write(self.analog_input_l_delay)
+        writer.write(self.analog_input_l_reverb)
+        writer.write(self.analog_input_r_chorus)
+        writer.write(self.analog_input_r_delay)
+        writer.write(self.analog_input_r_reverb)
         writer.write(self.usb_input_chorus)
         writer.write(self.usb_input_delay)
         writer.write(self.usb_input_reverb)
         writer.write(self.dj_filter)
         writer.write(self.dj_peak)
         writer.write(self.dj_filter_type)
-        writer.pad(4)
+        caps = version.caps if version is not None else None
+        if caps is not None and caps.has_limiter_settings:
+            writer.write(self.limiter_attack)
+            writer.write(self.limiter_release)
+            writer.write(self.limiter_soft_clip)
+        if caps is not None and caps.has_ott:
+            writer.write(self.ott_level)
+        if caps is None or not caps.has_limiter_settings:
+            writer.pad(4)
 
 
 @dataclass
@@ -221,20 +250,57 @@ class ReverbSettings:
 
 
 @dataclass
+class OTTSettings:
+    time: int = 0
+    color: int = 0
+
+    @staticmethod
+    def from_reader(reader: M8FileReader) -> OTTSettings:
+        return OTTSettings(time=reader.read(), color=reader.read())
+
+    def write(self, writer: M8FileWriter) -> None:
+        writer.write(self.time)
+        writer.write(self.color)
+
+
+@dataclass
 class EffectsSettings:
     chorus: ChorusSettings = field(default_factory=ChorusSettings)
     delay: DelaySettings = field(default_factory=DelaySettings)
     reverb: ReverbSettings = field(default_factory=ReverbSettings)
+    shimmer: int = 0
+    ott: OTTSettings | None = None
+    mfx_kind: int = 0
 
     @staticmethod
     def from_reader(reader: M8FileReader, version: M8Version | None = None) -> EffectsSettings:
+        chorus = ChorusSettings.from_reader(reader)
+        delay = DelaySettings.from_reader(reader)
+        reverb = ReverbSettings.from_reader(reader)
+
+        caps = version.caps if version is not None else None
+        shimmer = 0
+        ott = None
+        mfx_kind = 0
+        if caps is not None and caps.has_reverb_shimmer:
+            shimmer = reader.read()
+            ott = OTTSettings.from_reader(reader)
+            mfx_kind = reader.read()
+
         return EffectsSettings(
-            chorus=ChorusSettings.from_reader(reader),
-            delay=DelaySettings.from_reader(reader),
-            reverb=ReverbSettings.from_reader(reader),
+            chorus=chorus, delay=delay, reverb=reverb,
+            shimmer=shimmer, ott=ott, mfx_kind=mfx_kind,
         )
 
-    def write(self, writer: M8FileWriter) -> None:
+    def write(self, writer: M8FileWriter, version: M8Version | None = None) -> None:
         self.chorus.write(writer)
         self.delay.write(writer)
         self.reverb.write(writer)
+        caps = version.caps if version is not None else None
+        if caps is not None and caps.has_reverb_shimmer:
+            writer.write(self.shimmer)
+            if self.ott is not None:
+                self.ott.write(writer)
+            else:
+                OTTSettings().write(writer)
+            writer.write(self.mfx_kind)
