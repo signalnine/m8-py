@@ -7,7 +7,7 @@ m8py parses every M8 binary format -- songs (`.m8s`), instruments (`.m8i`), them
 ## Install
 
 ```bash
-pip install m8py
+pip install git+https://github.com/signalnine/m8-py.git
 ```
 
 Requires Python 3.11+.
