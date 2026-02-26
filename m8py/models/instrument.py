@@ -42,6 +42,7 @@ _TAIL_OFFSET = _MOD_ABS_OFFSET + _NUM_MODS * MOD_SIZE  # = 87
 _TAIL_SIZE = INSTRUMENT_SIZE - _TAIL_OFFSET              # = 128
 _COMMON_PREFIX_SIZE = 28       # kind(1) + name(12) + 5 common + 10 filter/mixer
 _SAMPLE_PATH_LEN = 128
+_HYPERSYNTH_CHORDS_SIZE = 112  # 16 chords × 7 bytes each
 
 
 def _default_mods() -> List[Modulator]:
@@ -118,27 +119,41 @@ class SynthCommon:
 # Helper: read/write modulators at absolute offset 63 and enforce tail
 # ---------------------------------------------------------------------------
 
-def _read_mods_and_seek_end(reader: M8FileReader, inst_start: int) -> List[Modulator]:
-    """Seek to offset 63, read 4 modulators, then seek to inst_start + 215."""
-    reader.seek(inst_start + _MOD_ABS_OFFSET)
+def _read_gap_and_mods(reader: M8FileReader, inst_start: int) -> tuple[bytes, List[Modulator]]:
+    """Read gap bytes from current position to offset 63, then read 4 modulators."""
+    current = reader.position()
+    gap_start = current - inst_start
+    gap_size = _MOD_ABS_OFFSET - gap_start
+    gap = reader.read_bytes(gap_size) if gap_size > 0 else b""
     mods = [mod_from_reader(reader) for _ in range(_NUM_MODS)]
-    return mods
+    return gap, mods
 
 
-def _write_mods_and_pad(writer: M8FileWriter, mods: List[Modulator],
+def _write_gap_and_mods(writer: M8FileWriter, gap: bytes, mods: List[Modulator],
                         inst_start: int) -> None:
-    """Pad to offset 63 from inst_start, write 4 modulators, pad to 215."""
+    """Write gap bytes then 4 modulators at offset 63 from inst_start."""
     current = writer.position()
     target = inst_start + _MOD_ABS_OFFSET
-    if current < target:
-        writer.pad(target - current)
-    elif current > target:
+    gap_needed = target - current
+    if gap_needed < 0:
         raise M8ParseError(
             f"overflowed into modulator region: wrote {current - inst_start} "
             f"bytes, expected <= {_MOD_ABS_OFFSET}"
         )
+    if gap and len(gap) == gap_needed:
+        writer.write_bytes(gap)
+    elif gap_needed > 0:
+        writer.pad(gap_needed)
     for m in mods:
         mod_write(m, writer)
+
+
+def _write_tail(writer: M8FileWriter, tail: bytes, inst_start: int) -> None:
+    """Write tail bytes (128 bytes at offset 87), preserving raw data."""
+    if tail and len(tail) == _TAIL_SIZE:
+        writer.write_bytes(tail)
+    else:
+        _pad_to_end(writer, inst_start)
 
 
 def _pad_to_end(writer: M8FileWriter, inst_start: int) -> None:
@@ -173,6 +188,8 @@ class WavSynth:
     warp: int = 0
     scan: int = 0
     modulators: List[Modulator] = field(default_factory=_default_mods)
+    _gap: bytes = b""
+    _tail: bytes = b""
 
     @staticmethod
     def from_reader(reader: M8FileReader, inst_start: int, version: M8Version) -> WavSynth:
@@ -182,10 +199,11 @@ class WavSynth:
         mult = reader.read()
         warp = reader.read()
         scan = reader.read()
-        mods = _read_mods_and_seek_end(reader, inst_start)
-        reader.seek(inst_start + INSTRUMENT_SIZE)
+        gap, mods = _read_gap_and_mods(reader, inst_start)
+        tail = reader.read_bytes(_TAIL_SIZE)
         return WavSynth(common=common, shape=shape, size=size,
-                        mult=mult, warp=warp, scan=scan, modulators=mods)
+                        mult=mult, warp=warp, scan=scan, modulators=mods,
+                        _gap=gap, _tail=tail)
 
     def write(self, writer: M8FileWriter) -> None:
         inst_start = writer.position()
@@ -196,8 +214,8 @@ class WavSynth:
         writer.write(self.mult)
         writer.write(self.warp)
         writer.write(self.scan)
-        _write_mods_and_pad(writer, self.modulators, inst_start)
-        _pad_to_end(writer, inst_start)
+        _write_gap_and_mods(writer, self._gap, self.modulators, inst_start)
+        _write_tail(writer, self._tail, inst_start)
         writer.expect_written(INSTRUMENT_SIZE, inst_start)
 
 
@@ -216,6 +234,8 @@ class MacroSynth:
     degrade: int = 0
     redux: int = 0
     modulators: List[Modulator] = field(default_factory=_default_mods)
+    _gap: bytes = b""
+    _tail: bytes = b""
 
     @staticmethod
     def from_reader(reader: M8FileReader, inst_start: int, version: M8Version) -> MacroSynth:
@@ -225,11 +245,11 @@ class MacroSynth:
         color = reader.read()
         degrade = reader.read()
         redux = reader.read()
-        mods = _read_mods_and_seek_end(reader, inst_start)
-        reader.seek(inst_start + INSTRUMENT_SIZE)
+        gap, mods = _read_gap_and_mods(reader, inst_start)
+        tail = reader.read_bytes(_TAIL_SIZE)
         return MacroSynth(common=common, shape=shape, timbre=timbre,
                           color=color, degrade=degrade, redux=redux,
-                          modulators=mods)
+                          modulators=mods, _gap=gap, _tail=tail)
 
     def write(self, writer: M8FileWriter) -> None:
         inst_start = writer.position()
@@ -240,8 +260,8 @@ class MacroSynth:
         writer.write(self.color)
         writer.write(self.degrade)
         writer.write(self.redux)
-        _write_mods_and_pad(writer, self.modulators, inst_start)
-        _pad_to_end(writer, inst_start)
+        _write_gap_and_mods(writer, self._gap, self.modulators, inst_start)
+        _write_tail(writer, self._tail, inst_start)
         writer.expect_written(INSTRUMENT_SIZE, inst_start)
 
 
@@ -263,6 +283,7 @@ class Sampler:
     degrade: int = 0
     sample_path: str = ""
     modulators: List[Modulator] = field(default_factory=_default_mods)
+    _gap: bytes = b""
 
     @staticmethod
     def from_reader(reader: M8FileReader, inst_start: int, version: M8Version) -> Sampler:
@@ -273,14 +294,12 @@ class Sampler:
         loop_start = reader.read()
         length = reader.read()
         degrade = reader.read()
-        mods = _read_mods_and_seek_end(reader, inst_start)
-        # Sample path is in the tail region at offset 0x57 (87)
-        reader.seek(inst_start + _TAIL_OFFSET)
+        gap, mods = _read_gap_and_mods(reader, inst_start)
         sample_path = reader.read_str(_SAMPLE_PATH_LEN)
-        reader.seek(inst_start + INSTRUMENT_SIZE)
         return Sampler(common=common, play_mode=play_mode, slice=slice_,
                        start=start, loop_start=loop_start, length=length,
-                       degrade=degrade, sample_path=sample_path, modulators=mods)
+                       degrade=degrade, sample_path=sample_path, modulators=mods,
+                       _gap=gap)
 
     def write(self, writer: M8FileWriter) -> None:
         inst_start = writer.position()
@@ -292,7 +311,7 @@ class Sampler:
         writer.write(self.loop_start)
         writer.write(self.length)
         writer.write(self.degrade)
-        _write_mods_and_pad(writer, self.modulators, inst_start)
+        _write_gap_and_mods(writer, self._gap, self.modulators, inst_start)
         # Write sample path in tail region (offset 87)
         writer.write_str(self.sample_path, _SAMPLE_PATH_LEN)
         writer.expect_written(INSTRUMENT_SIZE, inst_start)
@@ -346,6 +365,8 @@ class FMSynth:
     mod3: int = 0
     mod4: int = 0
     modulators: List[Modulator] = field(default_factory=_default_mods)
+    _gap: bytes = b""
+    _tail: bytes = b""
 
     @staticmethod
     def from_reader(reader: M8FileReader, inst_start: int, version: M8Version) -> FMSynth:
@@ -356,11 +377,11 @@ class FMSynth:
         mod2 = reader.read()
         mod3 = reader.read()
         mod4 = reader.read()
-        mods = _read_mods_and_seek_end(reader, inst_start)
-        reader.seek(inst_start + INSTRUMENT_SIZE)
+        gap, mods = _read_gap_and_mods(reader, inst_start)
+        tail = reader.read_bytes(_TAIL_SIZE)
         return FMSynth(common=common, algo=algo, operators=operators,
                        mod1=mod1, mod2=mod2, mod3=mod3, mod4=mod4,
-                       modulators=mods)
+                       modulators=mods, _gap=gap, _tail=tail)
 
     def write(self, writer: M8FileWriter) -> None:
         inst_start = writer.position()
@@ -373,8 +394,8 @@ class FMSynth:
         writer.write(self.mod2)
         writer.write(self.mod3)
         writer.write(self.mod4)
-        _write_mods_and_pad(writer, self.modulators, inst_start)
-        _pad_to_end(writer, inst_start)
+        _write_gap_and_mods(writer, self._gap, self.modulators, inst_start)
+        _write_tail(writer, self._tail, inst_start)
         writer.expect_written(INSTRUMENT_SIZE, inst_start)
 
 
@@ -394,8 +415,10 @@ class HyperSynth:
     swarm: int = 0
     width: int = 0
     subosc: int = 0
-    custom_chords: bytes = field(default_factory=lambda: bytes(16))
+    custom_chords: bytes = field(default_factory=lambda: bytes(_HYPERSYNTH_CHORDS_SIZE))
     modulators: List[Modulator] = field(default_factory=_default_mods)
+    _gap: bytes = b""
+    _tail: bytes = b""
 
     @staticmethod
     def from_reader(reader: M8FileReader, inst_start: int, version: M8Version) -> HyperSynth:
@@ -406,15 +429,14 @@ class HyperSynth:
         swarm = reader.read()
         width = reader.read()
         subosc = reader.read()
-        mods = _read_mods_and_seek_end(reader, inst_start)
-        # Custom chords are in the tail (16 bytes at offset 87)
-        reader.seek(inst_start + _TAIL_OFFSET)
-        custom_chords = reader.read_bytes(16)
-        reader.seek(inst_start + INSTRUMENT_SIZE)
+        gap, mods = _read_gap_and_mods(reader, inst_start)
+        custom_chords = reader.read_bytes(_HYPERSYNTH_CHORDS_SIZE)
+        tail = reader.read_bytes(_TAIL_SIZE - _HYPERSYNTH_CHORDS_SIZE)
         return HyperSynth(common=common, default_chord=default_chord,
                           scale=scale, shift=shift, swarm=swarm,
                           width=width, subosc=subosc,
-                          custom_chords=custom_chords, modulators=mods)
+                          custom_chords=custom_chords, modulators=mods,
+                          _gap=gap, _tail=tail)
 
     def write(self, writer: M8FileWriter) -> None:
         inst_start = writer.position()
@@ -428,12 +450,11 @@ class HyperSynth:
         writer.write(self.swarm)
         writer.write(self.width)
         writer.write(self.subosc)
-        _write_mods_and_pad(writer, self.modulators, inst_start)
-        # Write custom chords in tail (16 bytes)
-        writer.write_bytes(self.custom_chords[:16])
-        if len(self.custom_chords) < 16:
-            writer.pad(16 - len(self.custom_chords))
-        _pad_to_end(writer, inst_start)
+        _write_gap_and_mods(writer, self._gap, self.modulators, inst_start)
+        writer.write_bytes(self.custom_chords[:_HYPERSYNTH_CHORDS_SIZE])
+        if len(self.custom_chords) < _HYPERSYNTH_CHORDS_SIZE:
+            writer.pad(_HYPERSYNTH_CHORDS_SIZE - len(self.custom_chords))
+        _write_tail(writer, self._tail, inst_start)
         writer.expect_written(INSTRUMENT_SIZE, inst_start)
 
 
@@ -456,6 +477,8 @@ class External:
     ccc: bytes = field(default_factory=lambda: bytes(2))
     ccd: bytes = field(default_factory=lambda: bytes(2))
     modulators: List[Modulator] = field(default_factory=_default_mods)
+    _gap: bytes = b""
+    _tail: bytes = b""
 
     @staticmethod
     def from_reader(reader: M8FileReader, inst_start: int, version: M8Version) -> External:
@@ -469,11 +492,11 @@ class External:
         ccb = reader.read_bytes(2)
         ccc = reader.read_bytes(2)
         ccd = reader.read_bytes(2)
-        mods = _read_mods_and_seek_end(reader, inst_start)
-        reader.seek(inst_start + INSTRUMENT_SIZE)
+        gap, mods = _read_gap_and_mods(reader, inst_start)
+        tail = reader.read_bytes(_TAIL_SIZE)
         return External(common=common, input=inp, port=port, channel=channel,
                         bank=bank, program=program, cca=cca, ccb=ccb,
-                        ccc=ccc, ccd=ccd, modulators=mods)
+                        ccc=ccc, ccd=ccd, modulators=mods, _gap=gap, _tail=tail)
 
     def write(self, writer: M8FileWriter) -> None:
         inst_start = writer.position()
@@ -496,8 +519,8 @@ class External:
         writer.write_bytes(self.ccd[:2])
         if len(self.ccd) < 2:
             writer.pad(2 - len(self.ccd))
-        _write_mods_and_pad(writer, self.modulators, inst_start)
-        _pad_to_end(writer, inst_start)
+        _write_gap_and_mods(writer, self._gap, self.modulators, inst_start)
+        _write_tail(writer, self._tail, inst_start)
         writer.expect_written(INSTRUMENT_SIZE, inst_start)
 
 
@@ -547,6 +570,8 @@ class MIDIOut:
     program_change: int = 0
     control_changes: List[ControlChange] = field(default_factory=_default_ccs)
     modulators: List[Modulator] = field(default_factory=_default_mods)
+    _gap: bytes = b""
+    _tail: bytes = b""
 
     @staticmethod
     def from_reader(reader: M8FileReader, inst_start: int, version: M8Version) -> MIDIOut:
@@ -559,13 +584,12 @@ class MIDIOut:
         program_change = reader.read()
         reader.skip(3)  # reserved
         ccs = [ControlChange.from_reader(reader) for _ in range(_NUM_CCS)]
-        # Modulators are at absolute offset 63 (same as synth instruments)
-        mods = _read_mods_and_seek_end(reader, inst_start)
-        reader.seek(inst_start + INSTRUMENT_SIZE)
+        gap, mods = _read_gap_and_mods(reader, inst_start)
+        tail = reader.read_bytes(_TAIL_SIZE)
         return MIDIOut(name=name, transpose=transpose, table_tick=table_tick,
                        port=port, channel=channel, bank_select=bank_select,
                        program_change=program_change, control_changes=ccs,
-                       modulators=mods)
+                       modulators=mods, _gap=gap, _tail=tail)
 
     def write(self, writer: M8FileWriter) -> None:
         inst_start = writer.position()
@@ -580,8 +604,8 @@ class MIDIOut:
         writer.pad(3)  # reserved
         for cc in self.control_changes:
             cc.write(writer)
-        _write_mods_and_pad(writer, self.modulators, inst_start)
-        _pad_to_end(writer, inst_start)
+        _write_gap_and_mods(writer, self._gap, self.modulators, inst_start)
+        _write_tail(writer, self._tail, inst_start)
         writer.expect_written(INSTRUMENT_SIZE, inst_start)
 
 

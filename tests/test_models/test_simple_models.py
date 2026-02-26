@@ -46,7 +46,7 @@ class TestNoteInterval:
 
 class TestScale:
     def test_size(self):
-        w = M8FileWriter(); Scale().write(w); assert len(w.to_bytes()) == 42
+        w = M8FileWriter(); Scale().write(w); assert len(w.to_bytes()) == 46
     def test_roundtrip(self):
         s = Scale(name="MAJOR", note_enable=0b101010110101,
                   note_offsets=[NoteInterval(i, i*10) for i in range(12)])
@@ -54,6 +54,14 @@ class TestScale:
         s2 = Scale.from_reader(M8FileReader(w.to_bytes()))
         assert s2.name == "MAJOR" and s2.note_enable == 0b101010110101
         assert s2.note_offsets[5].semitone == 5
+    def test_tuning_roundtrip(self):
+        s = Scale(name="CUSTOM", tuning=440.0)
+        w = M8FileWriter(); s.write(w)
+        s2 = Scale.from_reader(M8FileReader(w.to_bytes()))
+        assert abs(s2.tuning - 440.0) < 0.01
+    def test_tuning_default_zero(self):
+        s = Scale()
+        assert s.tuning == 0.0
 
 class TestEQBand:
     def test_size(self):

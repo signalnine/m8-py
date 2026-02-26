@@ -18,16 +18,28 @@ from m8py.models.song import Song
 from m8py.models.theme import Theme
 from m8py.models.version import M8FileType, M8Version
 
+_EXT_TO_FILE_TYPE = {
+    ".m8s": FileType.SONG,
+    ".m8i": FileType.INSTRUMENT,
+    ".m8t": FileType.THEME,
+    ".m8n": FileType.SCALE,
+}
+
 
 def load(path: Union[str, Path]) -> Song | Instrument | Theme | Scale:
-    """Load an M8 file, auto-detecting file type from header."""
-    data = Path(path).read_bytes()
+    """Load an M8 file, detecting file type from extension."""
+    path = Path(path)
+    data = path.read_bytes()
     if len(data) < HEADER_SIZE:
         raise M8ParseError(
             f"file too small: {len(data)} bytes, need at least {HEADER_SIZE}"
         )
+    ext = path.suffix.lower()
+    file_type = _EXT_TO_FILE_TYPE.get(ext)
+    if file_type is None:
+        raise M8ParseError(f"unknown M8 file extension: {ext!r}")
     reader = M8FileReader(data)
-    version, file_type = M8FileType.from_reader(reader)
+    version = M8FileType.from_reader(reader)
     return _dispatch_read(reader, version, file_type)
 
 
@@ -72,14 +84,14 @@ def save(obj: Song | Instrument | Theme | Scale, path: Union[str, Path]) -> None
         # Song.write() handles header internally
         obj.write(writer)
     elif isinstance(obj, Theme):
-        M8FileType.write_header(writer, version, FileType.THEME)
+        M8FileType.write_header(writer, version)
         obj.write(writer)
     elif isinstance(obj, Scale):
-        M8FileType.write_header(writer, version, FileType.SCALE)
+        M8FileType.write_header(writer, version)
         obj.write(writer)
     else:
         # Instrument types
-        M8FileType.write_header(writer, version, FileType.INSTRUMENT)
+        M8FileType.write_header(writer, version)
         write_instrument(obj, writer)
 
     Path(path).write_bytes(writer.to_bytes())

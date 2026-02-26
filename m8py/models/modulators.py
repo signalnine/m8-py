@@ -15,6 +15,7 @@ class AHDEnv:
     attack: int = 0
     hold: int = 0
     decay: int = 0
+    _pad: int = 0
 
 
 @dataclass
@@ -34,6 +35,7 @@ class DrumEnv:
     peak: int = 0
     body: int = 0
     decay: int = 0
+    _pad: int = 0
 
 
 @dataclass
@@ -63,13 +65,23 @@ class TrackingEnv:
     src: int = 0
     lval: int = 0
     hval: int = 0
+    _pad: int = 0
 
 
-Modulator = AHDEnv | ADSREnv | DrumEnv | LFOMod | TrigEnv | TrackingEnv
+@dataclass
+class RawModulator:
+    """Raw 6-byte modulator data — used for empty slots (0xFF) or
+    unknown types not yet supported by m8py."""
+    data: bytes = b"\xff\xff\xff\xff\xff\xff"
 
 
-def empty_modulator() -> AHDEnv:
-    return AHDEnv()
+Modulator = AHDEnv | ADSREnv | DrumEnv | LFOMod | TrigEnv | TrackingEnv | RawModulator
+
+_EMPTY_MOD_BYTES = b"\xff\xff\xff\xff\xff\xff"
+
+
+def empty_modulator() -> RawModulator:
+    return RawModulator()
 
 
 def mod_from_reader(reader: M8FileReader) -> Modulator:
@@ -80,13 +92,15 @@ def mod_from_reader(reader: M8FileReader) -> Modulator:
 
     if ty == ModulatorType.AHD_ENV:
         mod = AHDEnv(dest=dest, amount=reader.read(), attack=reader.read(),
-                     hold=reader.read(), decay=reader.read())
+                     hold=reader.read(), decay=reader.read(),
+                     _pad=reader.read())
     elif ty == ModulatorType.ADSR_ENV:
         mod = ADSREnv(dest=dest, amount=reader.read(), attack=reader.read(),
                       decay=reader.read(), sustain=reader.read(), release=reader.read())
     elif ty == ModulatorType.DRUM_ENV:
         mod = DrumEnv(dest=dest, amount=reader.read(), peak=reader.read(),
-                      body=reader.read(), decay=reader.read())
+                      body=reader.read(), decay=reader.read(),
+                      _pad=reader.read())
     elif ty == ModulatorType.LFO:
         mod = LFOMod(dest=dest, amount=reader.read(), shape=reader.read(),
                      trigger_mode=reader.read(), freq=reader.read(), retrigger=reader.read())
@@ -95,20 +109,22 @@ def mod_from_reader(reader: M8FileReader) -> Modulator:
                       hold=reader.read(), decay=reader.read(), src=reader.read())
     elif ty == ModulatorType.TRACKING_ENV:
         mod = TrackingEnv(dest=dest, amount=reader.read(), src=reader.read(),
-                          lval=reader.read(), hval=reader.read())
+                          lval=reader.read(), hval=reader.read(),
+                          _pad=reader.read())
     else:
-        raise M8ParseError(f"unknown modulator type {ty} at offset {start}")
+        reader.seek(start)
+        mod = RawModulator(data=reader.read_bytes(MOD_SIZE))
+        return mod
 
-    reader.seek(start + MOD_SIZE)
     return mod
 
 
 def mod_write(mod: Modulator, writer: M8FileWriter) -> None:
-    start = writer.position()
     if isinstance(mod, AHDEnv):
         writer.write((ModulatorType.AHD_ENV << 4) | mod.dest)
         writer.write(mod.amount); writer.write(mod.attack)
         writer.write(mod.hold); writer.write(mod.decay)
+        writer.write(mod._pad)
     elif isinstance(mod, ADSREnv):
         writer.write((ModulatorType.ADSR_ENV << 4) | mod.dest)
         writer.write(mod.amount); writer.write(mod.attack)
@@ -117,6 +133,7 @@ def mod_write(mod: Modulator, writer: M8FileWriter) -> None:
         writer.write((ModulatorType.DRUM_ENV << 4) | mod.dest)
         writer.write(mod.amount); writer.write(mod.peak)
         writer.write(mod.body); writer.write(mod.decay)
+        writer.write(mod._pad)
     elif isinstance(mod, LFOMod):
         writer.write((ModulatorType.LFO << 4) | mod.dest)
         writer.write(mod.amount); writer.write(mod.shape)
@@ -129,8 +146,8 @@ def mod_write(mod: Modulator, writer: M8FileWriter) -> None:
         writer.write((ModulatorType.TRACKING_ENV << 4) | mod.dest)
         writer.write(mod.amount); writer.write(mod.src)
         writer.write(mod.lval); writer.write(mod.hval)
-
-    # Pad to exactly 6 bytes
-    written = writer.position() - start
-    if written < MOD_SIZE:
-        writer.pad(MOD_SIZE - written)
+        writer.write(mod._pad)
+    elif isinstance(mod, RawModulator):
+        writer.write_bytes(mod.data[:MOD_SIZE])
+        if len(mod.data) < MOD_SIZE:
+            writer.pad(MOD_SIZE - len(mod.data))

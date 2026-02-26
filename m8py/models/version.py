@@ -2,8 +2,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
-from m8py.format.constants import HEADER_MAGIC, FileType
+from m8py.format.constants import HEADER_MAGIC
 from m8py.format.errors import M8ParseError
+
+HEADER_MAGIC_BYTE = 0x10
 
 
 @dataclass
@@ -11,6 +13,7 @@ class M8Version:
     major: int
     minor: int
     patch: int
+    _header_tail: bytes = b"\x00\x10"
 
     def at_least(self, major: int, minor: int) -> bool:
         return self.major > major or (self.major == major and self.minor >= minor)
@@ -43,7 +46,7 @@ class VersionCapabilities:
 
 class M8FileType:
     @staticmethod
-    def from_reader(reader: M8FileReader) -> tuple[M8Version, FileType]:
+    def from_reader(reader: M8FileReader) -> M8Version:
         magic = reader.read_bytes(10)
         if magic != HEADER_MAGIC:
             raise M8ParseError(f"bad magic: expected {HEADER_MAGIC!r}, got {magic!r}")
@@ -52,19 +55,13 @@ class M8FileType:
         major = msb & 0x0F
         minor = (lsb >> 4) & 0x0F
         patch = lsb & 0x0F
-        file_type_nibble = (msb >> 4) & 0x0F
-        reader.skip(2)
-        try:
-            file_type = FileType(file_type_nibble)
-        except ValueError:
-            raise M8ParseError(f"unknown file type nibble: 0x{file_type_nibble:X}")
-        return M8Version(major, minor, patch), file_type
+        header_tail = reader.read_bytes(2)
+        return M8Version(major, minor, patch, _header_tail=header_tail)
 
     @staticmethod
-    def write_header(writer: M8FileWriter, version: M8Version, file_type: FileType) -> None:
+    def write_header(writer: M8FileWriter, version: M8Version) -> None:
         writer.write_bytes(HEADER_MAGIC)
         lsb = (version.minor << 4) | version.patch
-        msb = (file_type.value << 4) | version.major
         writer.write(lsb)
-        writer.write(msb)
-        writer.pad(2)
+        writer.write(version.major)
+        writer.write_bytes(version._header_tail)

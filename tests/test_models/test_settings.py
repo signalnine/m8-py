@@ -1,7 +1,10 @@
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
 from m8py.models.version import M8Version
-from m8py.models.settings import MIDISettings, MixerSettings, EffectsSettings
+from m8py.models.settings import (
+    MIDISettings, MixerSettings, EffectsSettings,
+    ChorusSettings, DelaySettings, ReverbSettings,
+)
 from m8py.models.midi import MIDIMapping
 
 V41 = M8Version(4, 1, 0)
@@ -59,32 +62,81 @@ class TestEffectsSettings:
     def test_roundtrip_v41(self):
         es = EffectsSettings()
         es.chorus.mod_depth = 42
+        es.chorus.width = 180
+        es.delay.filter_hp = 64
+        es.delay.filter_lp = 200
         es.delay.feedback = 100
+        es.reverb.filter_hp = 32
+        es.reverb.filter_lp = 240
         es.reverb.width = 200
         w = M8FileWriter()
         es.write(w)
         es2 = EffectsSettings.from_reader(M8FileReader(w.to_bytes()), V41)
         assert es2.chorus.mod_depth == 42
+        assert es2.chorus.width == 180
+        assert es2.delay.filter_hp == 64
+        assert es2.delay.filter_lp == 200
         assert es2.delay.feedback == 100
+        assert es2.reverb.filter_hp == 32
+        assert es2.reverb.filter_lp == 240
         assert es2.reverb.width == 200
 
-    def test_write_size_v4(self):
+    def test_write_size(self):
         w = M8FileWriter()
         EffectsSettings().write(w)
-        # chorus: 6, delay: 6, reverb: 5 = 17
-        assert len(w.to_bytes()) == 17
+        # chorus: 7, delay: 8, reverb: 7 = 22
+        assert len(w.to_bytes()) == 22
+
+    def test_chorus_has_width(self):
+        cs = ChorusSettings(mod_depth=10, mod_freq=20, width=0xFF, reverb_send=30)
+        w = M8FileWriter()
+        cs.write(w)
+        cs2 = ChorusSettings.from_reader(M8FileReader(w.to_bytes()))
+        assert cs2.width == 0xFF
+        assert cs2.reverb_send == 30
+
+    def test_delay_filter_always_present(self):
+        ds = DelaySettings(filter_hp=0x40, filter_lp=0xC0, time_l=30, feedback=80)
+        w = M8FileWriter()
+        ds.write(w)
+        ds2 = DelaySettings.from_reader(M8FileReader(w.to_bytes()))
+        assert ds2.filter_hp == 0x40
+        assert ds2.filter_lp == 0xC0
+        assert ds2.time_l == 30
+        assert ds2.feedback == 80
+
+    def test_reverb_filter_always_present(self):
+        rs = ReverbSettings(filter_hp=0x10, filter_lp=0xE0, size=0xFF, damping=0xC0)
+        w = M8FileWriter()
+        rs.write(w)
+        rs2 = ReverbSettings.from_reader(M8FileReader(w.to_bytes()))
+        assert rs2.filter_hp == 0x10
+        assert rs2.filter_lp == 0xE0
+        assert rs2.size == 0xFF
+        assert rs2.damping == 0xC0
 
 
 class TestMIDIMapping:
     def test_size(self):
         w = M8FileWriter()
         MIDIMapping().write(w)
-        assert len(w.to_bytes()) == 7
+        assert len(w.to_bytes()) == 9  # 7 data + 2 padding
 
     def test_roundtrip(self):
-        m = MIDIMapping(channel=3, control_number=64, max_value=127)
+        m = MIDIMapping(channel=3, control_number=64, type=5, instr_index=2, max_value=127)
         w = M8FileWriter()
         m.write(w)
         m2 = MIDIMapping.from_reader(M8FileReader(w.to_bytes()))
         assert m2.channel == 3
+        assert m2.control_number == 64
+        assert m2.type == 5
+        assert m2.instr_index == 2
         assert m2.max_value == 127
+
+    def test_field_names(self):
+        """Verify firmware-confirmed field names (not the old value/typ names)."""
+        m = MIDIMapping()
+        assert hasattr(m, "type")
+        assert hasattr(m, "instr_index")
+        assert not hasattr(m, "value")  # old name, was wrong
+        assert not hasattr(m, "typ")    # old name, was wrong

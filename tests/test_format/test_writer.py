@@ -27,7 +27,7 @@ def test_write_str_truncation():
     w.write_str("A" * 20, 12)
     data = w.to_bytes()
     assert len(data) == 12
-    assert data == b"AAAAAAAAAAA\x00"
+    assert data == b"AAAAAAAAAAAA"
 
 def test_write_str_empty():
     w = M8FileWriter()

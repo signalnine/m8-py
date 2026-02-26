@@ -34,7 +34,7 @@ class TestFuzzHeader:
     def test_random_header_no_crash(self, data):
         reader = M8FileReader(data)
         try:
-            version, ft = M8FileType.from_reader(reader)
+            version = M8FileType.from_reader(reader)
         except (M8Error, ValueError):
             pass
 

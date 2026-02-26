@@ -15,7 +15,7 @@ class M8FileWriter:
         self._buf.extend(data)
 
     def write_str(self, s: str, length: int) -> None:
-        encoded = s.encode("ascii")[:length - 1]
+        encoded = s.encode("ascii")[:length]
         self._buf.extend(encoded)
         self._buf.extend(b"\x00" * (length - len(encoded)))
 

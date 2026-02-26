@@ -4,7 +4,7 @@ from m8py.format.writer import M8FileWriter
 from m8py.format.constants import (
     EMPTY, HEADER_SIZE, N_SONG_STEPS, N_PHRASES, N_CHAINS,
     N_INSTRUMENTS, N_TABLES, N_GROOVES, N_SCALES, N_MIDI_MAPPINGS,
-    FileType, INSTRUMENT_SIZE,
+    INSTRUMENT_SIZE,
 )
 from m8py.models.song import Song
 from m8py.models.version import M8Version, M8FileType
@@ -51,8 +51,7 @@ class TestSong:
 
         # Read back -- skip 14-byte header
         reader = M8FileReader(data)
-        version, ft = M8FileType.from_reader(reader)
-        assert ft == FileType.SONG
+        version = M8FileType.from_reader(reader)
         assert version.major == 4
         assert version.minor == 1
 
@@ -83,7 +82,7 @@ class TestSong:
         data = writer.to_bytes()
 
         reader = M8FileReader(data)
-        version, ft = M8FileType.from_reader(reader)
+        version = M8FileType.from_reader(reader)
         song2 = Song.from_reader(reader, version)
 
         assert song2.name == "TestSong"
@@ -105,7 +104,7 @@ class TestSong:
         data = writer.to_bytes()
 
         reader = M8FileReader(data)
-        version, ft = M8FileType.from_reader(reader)
+        version = M8FileType.from_reader(reader)
         song2 = Song.from_reader(reader, version)
 
         inst = song2.instruments[0]
@@ -130,7 +129,7 @@ class TestSong:
         data = writer.to_bytes()
 
         reader = M8FileReader(data)
-        version, ft = M8FileType.from_reader(reader)
+        version = M8FileType.from_reader(reader)
         song2 = Song.from_reader(reader, version)
 
         assert song2.scales[0].name == "MyScale"
@@ -146,7 +145,7 @@ class TestSong:
         data = writer.to_bytes()
 
         reader = M8FileReader(data)
-        version, ft = M8FileType.from_reader(reader)
+        version = M8FileType.from_reader(reader)
         song2 = Song.from_reader(reader, version)
 
         assert len(song2.eqs) == 128

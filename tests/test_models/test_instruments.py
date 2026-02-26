@@ -177,8 +177,8 @@ class TestSamplerRoundtrip:
         long_path = "A" * 200
         orig = Sampler(sample_path=long_path)
         got = _roundtrip(orig)
-        # write_str truncates to length-1 = 127 chars
-        assert len(got.sample_path) <= 127
+        # write_str truncates to length = 128 chars
+        assert len(got.sample_path) <= 128
 
 
 class TestFMSynthRoundtrip:
@@ -220,7 +220,7 @@ class TestHyperSynthRoundtrip:
 
     def test_fields(self):
         chord = bytes([3, 5, 7, 10, 12, 0, 0])
-        custom = bytes(range(16))
+        custom = bytes(range(112))
         orig = HyperSynth(
             common=SynthCommon(name="HYPER"),
             default_chord=chord, scale=5, shift=2,

@@ -131,6 +131,7 @@ class MixerSettings:
 class ChorusSettings:
     mod_depth: int = 0
     mod_freq: int = 0
+    width: int = 0xFF
     reverb_send: int = 0
 
     @staticmethod
@@ -138,6 +139,7 @@ class ChorusSettings:
         cs = ChorusSettings(
             mod_depth=reader.read(),
             mod_freq=reader.read(),
+            width=reader.read(),
             reverb_send=reader.read(),
         )
         reader.skip(3)  # unused
@@ -146,12 +148,15 @@ class ChorusSettings:
     def write(self, writer: M8FileWriter) -> None:
         writer.write(self.mod_depth)
         writer.write(self.mod_freq)
+        writer.write(self.width)
         writer.write(self.reverb_send)
         writer.pad(3)
 
 
 @dataclass
 class DelaySettings:
+    filter_hp: int = 0x80
+    filter_lp: int = 0x80
     time_l: int = 0
     time_r: int = 0
     feedback: int = 0
@@ -159,10 +164,10 @@ class DelaySettings:
     reverb_send: int = 0
 
     @staticmethod
-    def from_reader(reader: M8FileReader, version: M8Version) -> DelaySettings:
-        if not version.at_least(4, 0):
-            reader.skip(2)  # hp, lp (pre-v4 only)
+    def from_reader(reader: M8FileReader) -> DelaySettings:
         ds = DelaySettings(
+            filter_hp=reader.read(),
+            filter_lp=reader.read(),
             time_l=reader.read(),
             time_r=reader.read(),
             feedback=reader.read(),
@@ -173,6 +178,8 @@ class DelaySettings:
         return ds
 
     def write(self, writer: M8FileWriter) -> None:
+        writer.write(self.filter_hp)
+        writer.write(self.filter_lp)
         writer.write(self.time_l)
         writer.write(self.time_r)
         writer.write(self.feedback)
@@ -183,6 +190,8 @@ class DelaySettings:
 
 @dataclass
 class ReverbSettings:
+    filter_hp: int = 0x80
+    filter_lp: int = 0x80
     size: int = 0
     damping: int = 0
     mod_depth: int = 0
@@ -190,10 +199,10 @@ class ReverbSettings:
     width: int = 0
 
     @staticmethod
-    def from_reader(reader: M8FileReader, version: M8Version) -> ReverbSettings:
-        if not version.at_least(4, 0):
-            reader.skip(2)  # hp, lp (pre-v4 only)
+    def from_reader(reader: M8FileReader) -> ReverbSettings:
         return ReverbSettings(
+            filter_hp=reader.read(),
+            filter_lp=reader.read(),
             size=reader.read(),
             damping=reader.read(),
             mod_depth=reader.read(),
@@ -202,6 +211,8 @@ class ReverbSettings:
         )
 
     def write(self, writer: M8FileWriter) -> None:
+        writer.write(self.filter_hp)
+        writer.write(self.filter_lp)
         writer.write(self.size)
         writer.write(self.damping)
         writer.write(self.mod_depth)
@@ -216,11 +227,11 @@ class EffectsSettings:
     reverb: ReverbSettings = field(default_factory=ReverbSettings)
 
     @staticmethod
-    def from_reader(reader: M8FileReader, version: M8Version) -> EffectsSettings:
+    def from_reader(reader: M8FileReader, version: M8Version | None = None) -> EffectsSettings:
         return EffectsSettings(
             chorus=ChorusSettings.from_reader(reader),
-            delay=DelaySettings.from_reader(reader, version),
-            reverb=ReverbSettings.from_reader(reader, version),
+            delay=DelaySettings.from_reader(reader),
+            reverb=ReverbSettings.from_reader(reader),
         )
 
     def write(self, writer: M8FileWriter) -> None:

@@ -122,7 +122,7 @@ class TestSongBuilder:
         data = writer.to_bytes()
 
         reader = M8FileReader(data)
-        version, ft = M8FileType.from_reader(reader)
+        version = M8FileType.from_reader(reader)
         song2 = Song.from_reader(reader, version)
 
         assert song2.name == "Round"

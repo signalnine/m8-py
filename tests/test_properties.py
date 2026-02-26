@@ -15,6 +15,7 @@ from m8py.models.table import TableStep, Table
 from m8py.models.theme import RGB, Theme
 from m8py.models.scale import NoteInterval, Scale
 from m8py.models.eq import EQBand, EQ
+from m8py.models.midi import MIDIMapping
 from m8py.models.instrument import (
     WavSynth, MacroSynth, Sampler, FMSynth, HyperSynth,
     External, MIDIOut, EmptyInstrument, SynthCommon,
@@ -96,10 +97,16 @@ def scale_strategy(draw):
         st.characters(whitelist_categories=('L', 'N'), min_codepoint=32, max_codepoint=126),
         min_size=0, max_size=15,
     ))
+    # Tuning: finite float32 values (avoid NaN/inf which don't roundtrip via ==)
+    tuning = draw(st.floats(
+        min_value=-1e6, max_value=1e6, allow_nan=False, allow_infinity=False,
+        width=32,
+    ))
     return Scale(
         name=name,
         note_enable=draw(st.integers(min_value=0, max_value=0xFFFF)),
         note_offsets=[draw(note_interval_strategy()) for _ in range(12)],
+        tuning=tuning,
     )
 
 
@@ -111,6 +118,15 @@ def eq_band_strategy(draw):
 @st.composite
 def eq_strategy(draw):
     return EQ(low=draw(eq_band_strategy()), mid=draw(eq_band_strategy()), high=draw(eq_band_strategy()))
+
+
+@st.composite
+def midi_mapping_strategy(draw):
+    return MIDIMapping(
+        channel=draw(u8), control_number=draw(u8),
+        type=draw(u8), instr_index=draw(u8),
+        param_index=draw(u8), min_value=draw(u8), max_value=draw(u8),
+    )
 
 
 # -- Roundtrip tests --
@@ -177,7 +193,7 @@ class TestRoundtrip:
         writer = M8FileWriter()
         scale.write(writer)
         data = writer.to_bytes()
-        assert len(data) == 42  # 2 + 24 + 16
+        assert len(data) == 46  # 2 + 24 + 16 + 4 (float32 tuning)
         reader = M8FileReader(data)
         scale2 = Scale.from_reader(reader)
         assert scale == scale2
@@ -192,6 +208,17 @@ class TestRoundtrip:
         reader = M8FileReader(data)
         eq2 = EQ.from_reader(reader)
         assert eq == eq2
+
+    @given(mapping=midi_mapping_strategy())
+    @settings(max_examples=50)
+    def test_midi_mapping_roundtrip(self, mapping):
+        writer = M8FileWriter()
+        mapping.write(writer)
+        data = writer.to_bytes()
+        assert len(data) == 9  # 7 data + 2 padding
+        reader = M8FileReader(data)
+        mapping2 = MIDIMapping.from_reader(reader)
+        assert mapping == mapping2
 
 
 class TestInstrumentInvariants:

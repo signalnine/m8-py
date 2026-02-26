@@ -1,37 +1,35 @@
 import pytest
-from m8py.models.version import M8Version, VersionCapabilities, M8FileType
+from m8py.models.version import M8Version, VersionCapabilities, M8FileType, HEADER_MAGIC_BYTE
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
-from m8py.format.constants import HEADER_MAGIC, FileType
+from m8py.format.constants import HEADER_MAGIC
 
 def test_version_from_reader():
-    data = HEADER_MAGIC + bytes([0x10, 0x04, 0x00, 0x00])
+    data = HEADER_MAGIC + bytes([0x10, 0x04, 0x00, 0x10])
     r = M8FileReader(data)
-    version, file_type = M8FileType.from_reader(r)
+    version = M8FileType.from_reader(r)
     assert version.major == 4
     assert version.minor == 1
     assert version.patch == 0
-    assert file_type == FileType.SONG
 
-def test_version_2_7_8_instrument():
-    data = HEADER_MAGIC + bytes([0x78, 0x12, 0x00, 0x00])
+def test_version_2_7_8():
+    data = HEADER_MAGIC + bytes([0x78, 0x02, 0x00, 0x10])
     r = M8FileReader(data)
-    version, file_type = M8FileType.from_reader(r)
+    version = M8FileType.from_reader(r)
     assert version.major == 2
     assert version.minor == 7
     assert version.patch == 8
-    assert file_type == FileType.INSTRUMENT
 
 def test_version_write_roundtrip():
     w = M8FileWriter()
     version = M8Version(4, 1, 0)
-    M8FileType.write_header(w, version, FileType.SONG)
+    M8FileType.write_header(w, version)
     data = w.to_bytes()
     assert len(data) == 14
+    assert data[13] == HEADER_MAGIC_BYTE
     r = M8FileReader(data)
-    v, ft = M8FileType.from_reader(r)
+    v = M8FileType.from_reader(r)
     assert v.major == 4 and v.minor == 1 and v.patch == 0
-    assert ft == FileType.SONG
 
 def test_version_at_least():
     v = M8Version(3, 2, 0)

@@ -3,7 +3,7 @@ from dataclasses import dataclass, field
 from typing import List
 
 from m8py.format.constants import (
-    EMPTY, FileType, HEADER_SIZE,
+    EMPTY, HEADER_SIZE,
     N_SONG_STEPS, N_PHRASES, N_CHAINS, N_INSTRUMENTS,
     N_TABLES, N_GROOVES, N_SCALES, N_MIDI_MAPPINGS,
 )
@@ -124,7 +124,7 @@ class Song:
         offsets = offsets_for_version(version)
 
         # Write header
-        M8FileType.write_header(writer, version, FileType.SONG)
+        M8FileType.write_header(writer, version)
 
         # Header section
         writer.write_bytes(self.directory[:128])

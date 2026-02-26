@@ -3,7 +3,7 @@ from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
 from m8py.format.errors import M8ParseError
 from m8py.models.modulators import (
-    AHDEnv, ADSREnv, DrumEnv, LFOMod, TrigEnv, TrackingEnv,
+    AHDEnv, ADSREnv, DrumEnv, LFOMod, TrigEnv, TrackingEnv, RawModulator,
     mod_from_reader, mod_write, MOD_SIZE, empty_modulator,
 )
 
@@ -52,12 +52,14 @@ def test_tracking_roundtrip():
 
 def test_empty_modulator():
     m = empty_modulator()
-    assert isinstance(m, AHDEnv)
-    w = M8FileWriter()
-    mod_write(m, w)
-    assert len(w.to_bytes()) == 6
+    assert isinstance(m, RawModulator)
+    assert m.data == b"\xff\xff\xff\xff\xff\xff"
+    m2 = _roundtrip(m)
+    assert isinstance(m2, RawModulator)
+    assert m2.data == m.data
 
-def test_unknown_type_raises():
+def test_unknown_type_returns_raw():
     data = bytes([0xF0, 0, 0, 0, 0, 0])  # type=15 is unknown
-    with pytest.raises(M8ParseError, match="unknown modulator type"):
-        mod_from_reader(M8FileReader(data))
+    m = mod_from_reader(M8FileReader(data))
+    assert isinstance(m, RawModulator)
+    assert m.data == data
