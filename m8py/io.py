@@ -78,21 +78,28 @@ def load_scale(path: Union[str, Path]) -> Scale:
 def save(obj: Song | Instrument | Theme | Scale, path: Union[str, Path]) -> None:
     """Save an M8 object to a file."""
     writer = M8FileWriter()
-    version = M8Version(4, 1, 0)  # default version
+    default_version = M8Version(4, 1, 0)
 
     if isinstance(obj, Song):
         # Song.write() handles header internally
         obj.write(writer)
     elif isinstance(obj, Theme):
+        version = getattr(obj, '_file_version', default_version)
         M8FileType.write_header(writer, version)
         obj.write(writer)
     elif isinstance(obj, Scale):
+        version = getattr(obj, '_file_version', default_version)
         M8FileType.write_header(writer, version)
-        obj.write(writer)
+        obj.write(writer, version)
     else:
         # Instrument types
+        version = getattr(obj, '_file_version', default_version)
         M8FileType.write_header(writer, version)
         write_instrument(obj, writer)
+        # Standalone .m8i files have extra bytes (EQ data) after the instrument
+        file_tail = getattr(obj, '_file_tail', None)
+        if file_tail is not None:
+            writer.write_bytes(file_tail)
 
     Path(path).write_bytes(writer.to_bytes())
 
@@ -104,10 +111,21 @@ def _dispatch_read(
     if file_type == FileType.SONG:
         return Song.from_reader(reader, version)
     elif file_type == FileType.INSTRUMENT:
-        return read_instrument(reader, version)
+        instrument = read_instrument(reader, version)
+        # Standalone .m8i files have extra bytes (EQ data) after the instrument.
+        # Preserve them for byte-exact roundtrip.
+        remaining = reader.remaining()
+        if remaining > 0:
+            instrument._file_tail = reader.read_bytes(remaining)
+        instrument._file_version = version
+        return instrument
     elif file_type == FileType.THEME:
-        return Theme.from_reader(reader)
+        theme = Theme.from_reader(reader)
+        theme._file_version = version
+        return theme
     elif file_type == FileType.SCALE:
-        return Scale.from_reader(reader, version)
+        scale = Scale.from_reader(reader, version)
+        scale._file_version = version
+        return scale
     else:
         raise M8ParseError(f"unsupported file type: {file_type}")
