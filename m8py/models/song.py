@@ -25,7 +25,7 @@ from m8py.models.version import M8Version, M8FileType
 
 @dataclass
 class Song:
-    version: M8Version = field(default_factory=lambda: M8Version(4, 1, 0))
+    version: M8Version = field(default_factory=lambda: M8Version(6, 5, 0))
     directory: bytes = field(default_factory=lambda: bytes(128))
     transpose: int = 0
     tempo: float = 120.0
@@ -47,6 +47,7 @@ class Song:
     midi_mappings: List[MIDIMapping] = field(default_factory=lambda: [MIDIMapping() for _ in range(N_MIDI_MAPPINGS)])
     scales: List[Scale] = field(default_factory=lambda: [Scale() for _ in range(N_SCALES)])
     eqs: List[EQ] = field(default_factory=list)
+    _file_tail: bytes = field(default_factory=bytes, repr=False)
 
     @staticmethod
     def from_reader(reader: M8FileReader, version: M8Version) -> Song:
@@ -101,6 +102,10 @@ class Song:
             reader.seek(offsets.eq)
             eqs = [EQ.from_reader(reader) for _ in range(offsets.instrument_eq_count)]
 
+        # Preserve any trailing bytes after the last section
+        remaining = reader.remaining()
+        _file_tail = reader.read_bytes(remaining) if remaining > 0 else b""
+
         return Song(
             version=version,
             directory=directory,
@@ -124,6 +129,7 @@ class Song:
             midi_mappings=midi_mappings,
             scales=scales,
             eqs=eqs,
+            _file_tail=_file_tail,
         )
 
     def write(self, writer: M8FileWriter) -> None:
@@ -191,6 +197,12 @@ class Song:
                     self.eqs[i].write(writer)
                 else:
                     EQ().write(writer)
+
+        # v6.5+ files have 32 trailing bytes after EQs
+        if self._file_tail:
+            writer.write_bytes(self._file_tail)
+        elif version.at_least(6, 5):
+            writer.pad(32)
 
 
 def _pad_to(writer: M8FileWriter, target: int) -> None:

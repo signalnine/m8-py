@@ -39,11 +39,11 @@ class TestSong:
         assert song.quantize == 0
         assert song.name == ""
         assert song.key == 0
-        assert song.version.major == 4
-        assert song.version.minor == 1
+        assert song.version.major == 6
+        assert song.version.minor == 5
 
-    def test_write_read_roundtrip_v41(self):
-        """Default v4.1 song writes to bytes and reads back identically."""
+    def test_write_read_roundtrip_default(self):
+        """Default v6.5 song writes to bytes and reads back identically."""
         song = Song()
         writer = M8FileWriter()
         song.write(writer)
@@ -52,8 +52,8 @@ class TestSong:
         # Read back -- skip 14-byte header
         reader = M8FileReader(data)
         version = M8FileType.from_reader(reader)
-        assert version.major == 4
-        assert version.minor == 1
+        assert version.major == 6
+        assert version.minor == 5
 
         song2 = Song.from_reader(reader, version)
         assert song2.transpose == song.transpose

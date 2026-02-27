@@ -1,5 +1,5 @@
 import pytest
-from m8py.models.version import M8Version, VersionCapabilities, M8FileType, HEADER_MAGIC_BYTE
+from m8py.models.version import M8Version, VersionCapabilities, M8FileType
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
 from m8py.format.constants import HEADER_MAGIC
@@ -26,7 +26,8 @@ def test_version_write_roundtrip():
     M8FileType.write_header(w, version)
     data = w.to_bytes()
     assert len(data) == 14
-    assert data[13] == HEADER_MAGIC_BYTE
+    assert data[12] == 0x00  # header tail byte 1
+    assert data[13] == 0x00  # header tail byte 2
     r = M8FileReader(data)
     v = M8FileType.from_reader(r)
     assert v.major == 4 and v.minor == 1 and v.patch == 0

@@ -13,7 +13,7 @@ class M8Version:
     major: int
     minor: int
     patch: int
-    _header_tail: bytes = b"\x00\x10"
+    _header_tail: bytes = b"\x00\x00"
 
     def at_least(self, major: int, minor: int) -> bool:
         return self.major > major or (self.major == major and self.minor >= minor)

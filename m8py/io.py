@@ -78,7 +78,7 @@ def load_scale(path: Union[str, Path]) -> Scale:
 def save(obj: Song | Instrument | Theme | Scale, path: Union[str, Path]) -> None:
     """Save an M8 object to a file."""
     writer = M8FileWriter()
-    default_version = M8Version(4, 1, 0)
+    default_version = M8Version(6, 5, 0)
 
     if isinstance(obj, Song):
         # Song.write() handles header internally
