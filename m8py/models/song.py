@@ -33,6 +33,7 @@ class Song:
     name: str = ""
     midi_settings: MIDISettings = field(default_factory=MIDISettings)
     key: int = 0
+    _reserved: bytes = field(default_factory=lambda: bytes(18), repr=False)
     mixer_settings: MixerSettings = field(default_factory=MixerSettings)
     grooves: List[Groove] = field(default_factory=lambda: [Groove() for _ in range(N_GROOVES)])
     song_steps: List[SongStep] = field(default_factory=lambda: [SongStep() for _ in range(N_SONG_STEPS)])
@@ -40,7 +41,9 @@ class Song:
     chains: List[Chain] = field(default_factory=lambda: [Chain() for _ in range(N_CHAINS)])
     tables: List[Table] = field(default_factory=lambda: [Table() for _ in range(N_TABLES)])
     instruments: List[Instrument] = field(default_factory=lambda: [EmptyInstrument() for _ in range(N_INSTRUMENTS)])
+    _post_instruments: bytes = field(default_factory=lambda: bytes(3), repr=False)
     effects_settings: EffectsSettings = field(default_factory=EffectsSettings)
+    _post_effects: bytes = field(default_factory=bytes, repr=False)
     midi_mappings: List[MIDIMapping] = field(default_factory=lambda: [MIDIMapping() for _ in range(N_MIDI_MAPPINGS)])
     scales: List[Scale] = field(default_factory=lambda: [Scale() for _ in range(N_SCALES)])
     eqs: List[EQ] = field(default_factory=list)
@@ -57,7 +60,7 @@ class Song:
         name = reader.read_str(12)
         midi_settings = MIDISettings.from_reader(reader)
         key = reader.read()
-        reader.skip(18)  # reserved
+        _reserved = reader.read_bytes(18)
         mixer_settings = MixerSettings.from_reader(reader, version)
 
         # Seek-based sections
@@ -79,16 +82,17 @@ class Song:
         reader.seek(offsets.instruments)
         instruments = [read_instrument(reader, version) for _ in range(N_INSTRUMENTS)]
 
-        reader.skip(3)  # padding after instruments
+        _post_instruments = reader.read_bytes(3)
         effects_settings = EffectsSettings.from_reader(reader, version)
-
-        reader.seek(offsets.midi_mapping)
+        # Preserve bytes between effects end and midi_mapping
+        effects_tail_size = offsets.midi_mapping - reader.position()
+        _post_effects = reader.read_bytes(effects_tail_size) if effects_tail_size > 0 else b""
         midi_mappings = [MIDIMapping.from_reader(reader) for _ in range(N_MIDI_MAPPINGS)]
 
         scales: List[Scale]
         if version.caps.has_scales and offsets.scale is not None:
             reader.seek(offsets.scale)
-            scales = [Scale.from_reader(reader) for _ in range(N_SCALES)]
+            scales = [Scale.from_reader(reader, version) for _ in range(N_SCALES)]
         else:
             scales = [Scale() for _ in range(N_SCALES)]
 
@@ -106,6 +110,7 @@ class Song:
             name=name,
             midi_settings=midi_settings,
             key=key,
+            _reserved=_reserved,
             mixer_settings=mixer_settings,
             grooves=grooves,
             song_steps=song_steps,
@@ -113,7 +118,9 @@ class Song:
             chains=chains,
             tables=tables,
             instruments=instruments,
+            _post_instruments=_post_instruments,
             effects_settings=effects_settings,
+            _post_effects=_post_effects,
             midi_mappings=midi_mappings,
             scales=scales,
             eqs=eqs,
@@ -136,7 +143,7 @@ class Song:
         writer.write_str(self.name, 12)
         self.midi_settings.write(writer)
         writer.write(self.key)
-        writer.pad(18)  # reserved
+        writer.write_bytes(self._reserved)
         self.mixer_settings.write(writer, version)
 
         # Pad to groove offset
@@ -164,9 +171,10 @@ class Song:
         for inst in self.instruments:
             write_instrument(inst, writer)
 
-        writer.pad(3)  # padding after instruments
+        writer.write_bytes(self._post_instruments[:3])
         self.effects_settings.write(writer, version)
-
+        if self._post_effects:
+            writer.write_bytes(self._post_effects)
         _pad_to(writer, offsets.midi_mapping)
         for m in self.midi_mappings:
             m.write(writer)
@@ -174,7 +182,7 @@ class Song:
         if version.caps.has_scales and offsets.scale is not None:
             _pad_to(writer, offsets.scale)
             for s in self.scales:
-                s.write(writer)
+                s.write(writer, version)
 
         if version.caps.has_eq and offsets.eq is not None:
             _pad_to(writer, offsets.eq)

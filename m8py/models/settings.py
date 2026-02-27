@@ -110,15 +110,12 @@ class MixerSettings:
             dj_peak=reader.read(),
             dj_filter_type=reader.read(),
         )
-        caps = version.caps if version is not None else None
-        if caps is not None and caps.has_limiter_settings:
-            ms.limiter_attack = reader.read()
-            ms.limiter_release = reader.read()
-            ms.limiter_soft_clip = reader.read()
-        if caps is not None and caps.has_ott:
-            ms.ott_level = reader.read()
-        if caps is None or not caps.has_limiter_settings:
-            reader.skip(4)  # padding (pre-v6.0)
+        # Last 4 bytes: limiter fields (v6.0+) / ott_level (v6.1+) / padding (pre-v6).
+        # Always read all 4 to preserve round-trip fidelity.
+        ms.limiter_attack = reader.read()
+        ms.limiter_release = reader.read()
+        ms.limiter_soft_clip = reader.read()
+        ms.ott_level = reader.read()
         return ms
 
     def write(self, writer: M8FileWriter, version: M8Version | None = None) -> None:
@@ -145,15 +142,12 @@ class MixerSettings:
         writer.write(self.dj_filter)
         writer.write(self.dj_peak)
         writer.write(self.dj_filter_type)
-        caps = version.caps if version is not None else None
-        if caps is not None and caps.has_limiter_settings:
-            writer.write(self.limiter_attack)
-            writer.write(self.limiter_release)
-            writer.write(self.limiter_soft_clip)
-        if caps is not None and caps.has_ott:
-            writer.write(self.ott_level)
-        if caps is None or not caps.has_limiter_settings:
-            writer.pad(4)
+        # Last 4 bytes: limiter fields (v6.0+) / ott_level (v6.1+) / padding (pre-v6).
+        # Always write all 4 to preserve round-trip fidelity.
+        writer.write(self.limiter_attack)
+        writer.write(self.limiter_release)
+        writer.write(self.limiter_soft_clip)
+        writer.write(self.ott_level)
 
 
 @dataclass
@@ -162,6 +156,7 @@ class ChorusSettings:
     mod_freq: int = 0
     width: int = 0xFF
     reverb_send: int = 0
+    _tail: bytes = field(default_factory=lambda: bytes(3), repr=False)
 
     @staticmethod
     def from_reader(reader: M8FileReader) -> ChorusSettings:
@@ -170,8 +165,8 @@ class ChorusSettings:
             mod_freq=reader.read(),
             width=reader.read(),
             reverb_send=reader.read(),
+            _tail=reader.read_bytes(3),
         )
-        reader.skip(3)  # unused
         return cs
 
     def write(self, writer: M8FileWriter) -> None:
@@ -179,7 +174,7 @@ class ChorusSettings:
         writer.write(self.mod_freq)
         writer.write(self.width)
         writer.write(self.reverb_send)
-        writer.pad(3)
+        writer.write_bytes(self._tail[:3])
 
 
 @dataclass
@@ -191,6 +186,7 @@ class DelaySettings:
     feedback: int = 0
     width: int = 0
     reverb_send: int = 0
+    _tail: bytes = field(default_factory=lambda: bytes(1), repr=False)
 
     @staticmethod
     def from_reader(reader: M8FileReader) -> DelaySettings:
@@ -202,8 +198,8 @@ class DelaySettings:
             feedback=reader.read(),
             width=reader.read(),
             reverb_send=reader.read(),
+            _tail=reader.read_bytes(1),
         )
-        reader.skip(1)  # unused
         return ds
 
     def write(self, writer: M8FileWriter) -> None:
@@ -214,7 +210,7 @@ class DelaySettings:
         writer.write(self.feedback)
         writer.write(self.width)
         writer.write(self.reverb_send)
-        writer.pad(1)
+        writer.write_bytes(self._tail[:1])
 
 
 @dataclass

@@ -108,6 +108,6 @@ def _dispatch_read(
     elif file_type == FileType.THEME:
         return Theme.from_reader(reader)
     elif file_type == FileType.SCALE:
-        return Scale.from_reader(reader)
+        return Scale.from_reader(reader, version)
     else:
         raise M8ParseError(f"unsupported file type: {file_type}")

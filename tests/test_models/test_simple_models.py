@@ -4,6 +4,10 @@ from m8py.models.fx import FX
 from m8py.models.theme import RGB, Theme
 from m8py.models.scale import NoteInterval, Scale
 from m8py.models.eq import EQBand, EQ
+from m8py.models.version import M8Version
+
+V41 = M8Version(4, 1, 0)
+V30 = M8Version(3, 0, 0)
 
 class TestFX:
     def test_empty(self):
@@ -45,19 +49,28 @@ class TestNoteInterval:
         w = M8FileWriter(); NoteInterval().write(w); assert len(w.to_bytes()) == 2
 
 class TestScale:
-    def test_size(self):
-        w = M8FileWriter(); Scale().write(w); assert len(w.to_bytes()) == 46
-    def test_roundtrip(self):
+    def test_size_v4(self):
+        w = M8FileWriter(); Scale().write(w, V41); assert len(w.to_bytes()) == 46
+    def test_size_v3(self):
+        w = M8FileWriter(); Scale().write(w, V30); assert len(w.to_bytes()) == 42
+    def test_roundtrip_v4(self):
         s = Scale(name="MAJOR", note_enable=0b101010110101,
                   note_offsets=[NoteInterval(i, i*10) for i in range(12)])
-        w = M8FileWriter(); s.write(w)
-        s2 = Scale.from_reader(M8FileReader(w.to_bytes()))
+        w = M8FileWriter(); s.write(w, V41)
+        s2 = Scale.from_reader(M8FileReader(w.to_bytes()), V41)
         assert s2.name == "MAJOR" and s2.note_enable == 0b101010110101
         assert s2.note_offsets[5].semitone == 5
+    def test_roundtrip_v3(self):
+        s = Scale(name="MAJOR", note_enable=0b101010110101,
+                  note_offsets=[NoteInterval(i, i*10) for i in range(12)])
+        w = M8FileWriter(); s.write(w, V30)
+        s2 = Scale.from_reader(M8FileReader(w.to_bytes()), V30)
+        assert s2.name == "MAJOR" and s2.note_enable == 0b101010110101
+        assert s2.tuning == 0.0  # no tuning in v3
     def test_tuning_roundtrip(self):
         s = Scale(name="CUSTOM", tuning=440.0)
-        w = M8FileWriter(); s.write(w)
-        s2 = Scale.from_reader(M8FileReader(w.to_bytes()))
+        w = M8FileWriter(); s.write(w, V41)
+        s2 = Scale.from_reader(M8FileReader(w.to_bytes()), V41)
         assert abs(s2.tuning - 440.0) < 0.01
     def test_tuning_default_zero(self):
         s = Scale()

@@ -190,12 +190,13 @@ class TestRoundtrip:
     @given(scale=scale_strategy())
     @settings(max_examples=50)
     def test_scale_roundtrip(self, scale):
+        v41 = M8Version(4, 1, 0)
         writer = M8FileWriter()
-        scale.write(writer)
+        scale.write(writer, v41)
         data = writer.to_bytes()
         assert len(data) == 46  # 2 + 24 + 16 + 4 (float32 tuning)
         reader = M8FileReader(data)
-        scale2 = Scale.from_reader(reader)
+        scale2 = Scale.from_reader(reader, v41)
         assert scale == scale2
 
     @given(eq=eq_strategy())

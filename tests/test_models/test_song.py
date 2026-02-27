@@ -136,9 +136,9 @@ class TestSong:
         assert song2.scales[0].note_enable == 0x0FFF
 
     def test_eqs_present_v41(self):
-        """v4.1 songs include EQs (128 of them)."""
+        """v4.1 songs include EQs (132: 128 instruments + 3 effects + 1 global)."""
         song = Song()
-        song.eqs = [EQ() for _ in range(128)]
+        song.eqs = [EQ() for _ in range(132)]
 
         writer = M8FileWriter()
         song.write(writer)
@@ -148,17 +148,17 @@ class TestSong:
         version = M8FileType.from_reader(reader)
         song2 = Song.from_reader(reader, version)
 
-        assert len(song2.eqs) == 128
+        assert len(song2.eqs) == 132
 
     def test_file_size_reasonable(self):
         """Default v4.1 song produces a reasonably-sized output."""
         song = Song()
-        song.eqs = [EQ() for _ in range(128)]
+        song.eqs = [EQ() for _ in range(132)]
         writer = M8FileWriter()
         song.write(writer)
         data = writer.to_bytes()
         # Should be at least the eq offset + eq data
-        # V4.1 eq offset is 0x1AD5E, plus 128 * 18 = 2304
+        # V4.1 eq offset is 0x1AD5E, plus 132 * 18 = 2376
         assert len(data) > 0x1AD5E
 
     def test_header_is_song_type(self):

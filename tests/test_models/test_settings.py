@@ -224,13 +224,13 @@ class TestMixerSettingsV6:
     def test_v60_write_size(self):
         w = M8FileWriter()
         MixerSettings().write(w, V60)
-        # 28 base + 3 limiter = 31
-        assert len(w.to_bytes()) == 31
+        # Always 32: 28 base + 4 trailing (limiter/ott/padding)
+        assert len(w.to_bytes()) == 32
 
     def test_v62_write_size(self):
         w = M8FileWriter()
         MixerSettings().write(w, V62)
-        # 28 base + 3 limiter + 1 ott = 32
+        # Always 32: 28 base + 4 trailing (limiter/ott/padding)
         assert len(w.to_bytes()) == 32
 
 

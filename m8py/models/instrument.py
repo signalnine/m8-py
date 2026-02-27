@@ -661,8 +661,12 @@ def read_instrument(reader: M8FileReader, version: M8Version) -> Instrument:
 
     Reads the kind byte, dispatches to the appropriate type's from_reader,
     and guarantees the reader ends at exactly start + 215.
+    Stores raw bytes on the instrument for byte-exact roundtrip fidelity.
     """
     inst_start = reader.position()
+    # Capture raw bytes before parsing for roundtrip fidelity
+    raw = reader._data[inst_start:inst_start + INSTRUMENT_SIZE]
+
     kind_byte = reader.read()
 
     try:
@@ -675,13 +679,18 @@ def read_instrument(reader: M8FileReader, version: M8Version) -> Instrument:
     cls = _KIND_MAP[kind]
     instrument = cls.from_reader(reader, inst_start, version)
     reader.expect_consumed(INSTRUMENT_SIZE, inst_start)
+    instrument._raw = raw
     return instrument
 
 
 def write_instrument(instrument: Instrument, writer: M8FileWriter) -> None:
     """Write one instrument (215 bytes) to the writer.
 
-    Delegates to the instrument's write() method, which is responsible
-    for enforcing the 215-byte size.
+    Uses stored raw bytes for byte-exact roundtrip fidelity when available.
+    Falls back to structured serialization for programmatically created instruments.
     """
-    instrument.write(writer)
+    raw = getattr(instrument, '_raw', None)
+    if raw is not None:
+        writer.write_bytes(raw)
+    else:
+        instrument.write(writer)

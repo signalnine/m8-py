@@ -42,7 +42,8 @@ V4_OFFSETS = SongOffsets(
     chains=0x9A5E, table=0xBA3E, instruments=0x13A3E,
     effect_settings=0x1A5C1, midi_mapping=0x1A5FE,
     scale=0x1AA7E, eq=0x1AD5E,
-    instrument_eq_count=32, instrument_file_eq_offset=None,
+    # 32 instrument EQs + 3 effects EQs + 1 global EQ = 36
+    instrument_eq_count=36, instrument_file_eq_offset=None,
 )
 
 V4_1_OFFSETS = SongOffsets(
@@ -50,7 +51,8 @@ V4_1_OFFSETS = SongOffsets(
     chains=0x9A5E, table=0xBA3E, instruments=0x13A3E,
     effect_settings=0x1A5C1, midi_mapping=0x1A5FE,
     scale=0x1AA7E, eq=0x1AD5E,
-    instrument_eq_count=128, instrument_file_eq_offset=0x165,
+    # 128 instrument EQs + 3 effects EQs + 1 global EQ = 132
+    instrument_eq_count=132, instrument_file_eq_offset=0x165,
 )
 
 
