@@ -75,6 +75,12 @@ class TestScale:
     def test_tuning_default_zero(self):
         s = Scale()
         assert s.tuning == 0.0
+    def test_roundtrip_version_none(self):
+        s = Scale(name="CUSTOM", tuning=440.0)
+        w = M8FileWriter(); s.write(w)
+        s2 = Scale.from_reader(M8FileReader(w.to_bytes()))
+        assert s2.name == "CUSTOM"
+        assert abs(s2.tuning - 440.0) < 0.01
 
 class TestEQBand:
     def test_size(self):

@@ -1,0 +1,2 @@
+{"id":"int-ce14f275","kind":"field_change","created_at":"2026-04-23T07:06:09.313069586Z","actor":"Gabe Ortiz","issue_id":"m8-py-gf0","extra":{"field":"status","new_value":"in_progress","old_value":"open"}}
+{"id":"int-2bd36a3f","kind":"field_change","created_at":"2026-04-23T07:07:14.927247851Z","actor":"Gabe Ortiz","issue_id":"m8-py-gf0","extra":{"field":"status","new_value":"closed","old_value":"in_progress","reason":"Fixed inconsistency: Scale.from_reader now matches Scale.write — both treat version=None as 'has tuning' (v4+ default). Added test_roundtrip_version_none."}}

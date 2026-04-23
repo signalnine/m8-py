@@ -41,7 +41,7 @@ class Scale:
             chars.append(chr(b))
         name = "".join(chars)
         tuning = 0.0
-        has_tuning = version is not None and version.at_least(4, 0)
+        has_tuning = version is None or version.at_least(4, 0)
         if has_tuning:
             tuning = reader.read_float_le()
         return Scale(name=name, note_enable=note_enable,
