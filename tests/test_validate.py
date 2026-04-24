@@ -77,10 +77,32 @@ class TestValidation:
 
     def test_name_too_long_warning(self):
         song = Song()
-        song.name = "VeryLongSongName"  # > 11 chars
+        song.name = "VeryLongSongName"  # > 12 chars
         issues = validate(song)
         warnings = [i for i in issues if i.severity == Severity.WARNING]
         assert any("truncated" in i.message for i in warnings)
+
+    def test_name_at_field_width_no_warning(self):
+        """A 12-char name fits exactly in the 12-byte field — no truncation."""
+        song = Song()
+        song.name = "ABCDEFGHIJKL"  # exactly 12 chars, the field width
+        issues = validate(song)
+        warnings = [i for i in issues if i.severity == Severity.WARNING and i.path == "song.name"]
+        assert not warnings
+
+    def test_name_at_field_width_roundtrips(self):
+        """A 12-char name roundtrips losslessly (proves the field is 12 bytes)."""
+        from m8py.format.reader import M8FileReader
+        from m8py.format.writer import M8FileWriter
+        from m8py.models.version import M8FileType
+        song = Song()
+        song.name = "ABCDEFGHIJKL"
+        writer = M8FileWriter()
+        song.write(writer)
+        reader = M8FileReader(writer.to_bytes())
+        version = M8FileType.from_reader(reader)
+        loaded = Song.from_reader(reader, version)
+        assert loaded.name == "ABCDEFGHIJKL"
 
     def test_empty_references_are_valid(self):
         """EMPTY (0xFF) references should not trigger errors."""

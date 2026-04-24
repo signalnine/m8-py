@@ -52,11 +52,11 @@ def validate(song: Song) -> List[ValidationIssue]:
             f"key {song.key} exceeds byte range",
         ))
 
-    # Song name length
-    if len(song.name) > 11:
+    # Song name length (12-byte field, no null terminator required)
+    if len(song.name) > 12:
         issues.append(ValidationIssue(
             Severity.WARNING, "song.name",
-            f"name '{song.name}' will be truncated to 11 characters",
+            f"name '{song.name}' will be truncated to 12 characters",
         ))
 
     # Song step chain references
