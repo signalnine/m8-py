@@ -1,4 +1,6 @@
 import struct
+import pytest
+from m8py.format.errors import M8ParseError
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
 from m8py.format.constants import (
@@ -168,3 +170,40 @@ class TestSong:
         song.write(writer)
         data = writer.to_bytes()
         assert data[:10] == b"M8VERSION\x00"
+
+
+class TestPadTo:
+    def test_overrun_raises_m8_parse_error(self):
+        from m8py.models.song import _pad_to
+        writer = M8FileWriter()
+        writer.pad(100)
+        with pytest.raises(M8ParseError):
+            _pad_to(writer, 50)
+
+    def test_overrun_message_includes_position_target_and_overrun(self):
+        from m8py.models.song import _pad_to
+        writer = M8FileWriter()
+        writer.pad(100)
+        with pytest.raises(M8ParseError) as exc_info:
+            _pad_to(writer, 50)
+        msg = str(exc_info.value)
+        # Position 100 = 0x64, target 50 = 0x32, overrun = 50
+        assert "0x64" in msg or "100" in msg
+        assert "0x32" in msg or "50" in msg
+        assert "50" in msg  # overrun amount
+
+    def test_at_target_is_noop(self):
+        from m8py.models.song import _pad_to
+        writer = M8FileWriter()
+        writer.pad(100)
+        _pad_to(writer, 100)
+        assert writer.position() == 100
+
+    def test_below_target_pads_with_zeros(self):
+        from m8py.models.song import _pad_to
+        writer = M8FileWriter()
+        writer.pad(50)
+        _pad_to(writer, 100)
+        assert writer.position() == 100
+        # Last 50 bytes should be zeros
+        assert writer.to_bytes()[50:100] == bytes(50)

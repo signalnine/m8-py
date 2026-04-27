@@ -7,6 +7,7 @@ from m8py.format.constants import (
     N_SONG_STEPS, N_PHRASES, N_CHAINS, N_INSTRUMENTS,
     N_TABLES, N_GROOVES, N_SCALES, N_MIDI_MAPPINGS,
 )
+from m8py.format.errors import M8ParseError
 from m8py.format.offsets import offsets_for_version
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
@@ -210,3 +211,8 @@ def _pad_to(writer: M8FileWriter, target: int) -> None:
     current = writer.position()
     if current < target:
         writer.pad(target - current)
+    elif current > target:
+        raise M8ParseError(
+            f"section overran target offset 0x{target:X}: "
+            f"current position 0x{current:X}, overrun {current - target} bytes"
+        )
