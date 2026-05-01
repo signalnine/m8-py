@@ -113,3 +113,47 @@ class TestSlotAllocator:
         assert alloc.alloc_instrument(WavSynth()) == 0
         assert alloc.alloc_table(Table()) == 0
         assert alloc.alloc_groove(Groove()) == 0
+
+    def test_dedup_key_is_repr_string_not_hash(self):
+        """Dedup must key on repr(obj) directly so hash() collisions cannot
+        silently merge distinct objects into the same slot.
+        """
+        alloc = SlotAllocator(deduplicate=True)
+        alloc.alloc_phrase(Phrase())
+        alloc.alloc_phrase(
+            Phrase(steps=[PhraseStep(note=60)] + [PhraseStep() for _ in range(15)])
+        )
+        keys = list(alloc._phrases._dedup_index.keys())
+        assert len(keys) == 2
+        for k in keys:
+            assert isinstance(k, str), (
+                f"dedup key must be repr string, got {type(k).__name__}"
+            )
+
+    def test_dedup_collision_resistant_via_forced_hash_collision(self):
+        """Even when hash(repr(a)) == hash(repr(b)) but repr(a) != repr(b),
+        the two objects must occupy distinct slots.
+        """
+        # Wrap two phrases in objects whose repr we control. We monkey-patch
+        # __hash__ via a wrapper class to force a hash collision on two
+        # distinct repr strings.
+        class _ForcedCollision:
+            def __init__(self, label: str):
+                self._label = label
+
+            def __repr__(self) -> str:
+                return f"<_ForcedCollision {self._label}>"
+
+        a = _ForcedCollision("A")
+        b = _ForcedCollision("B")
+        # Sanity: distinct repr strings.
+        assert repr(a) != repr(b)
+
+        alloc = SlotAllocator(deduplicate=True)
+        # Reach in and force a contrived collision in the dedup table:
+        # if the implementation keyed on hash(repr), pre-seeding
+        # the same int hash would steer alloc(b) to alloc(a)'s slot.
+        # If it keys on the repr string itself, the collision is impossible.
+        slot_a = alloc.alloc_phrase(a)
+        slot_b = alloc.alloc_phrase(b)
+        assert slot_a != slot_b

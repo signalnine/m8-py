@@ -30,7 +30,7 @@ class M8FileReader:
         raw = self.read_bytes(n)
         result = []
         for b in raw:
-            if b == 0x00 or b == 0xFF:
+            if b == 0x00 or b == 0xFF or b >= 0x80:
                 break
             result.append(chr(b))
         return "".join(result)

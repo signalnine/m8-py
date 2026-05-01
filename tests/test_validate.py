@@ -121,3 +121,58 @@ class TestValidation:
         issues = validate(song)
         errors = [i for i in issues if i.severity == Severity.ERROR]
         assert any("transpose" in i.path for i in errors)
+
+    def test_byte_field_negative_transpose(self):
+        song = Song()
+        song.transpose = -1
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("transpose" in i.path for i in errors)
+
+    def test_byte_field_negative_quantize(self):
+        song = Song()
+        song.quantize = -1
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("quantize" in i.path for i in errors)
+
+    def test_byte_field_negative_key(self):
+        song = Song()
+        song.key = -1
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("key" in i.path for i in errors)
+
+    def test_song_name_non_ascii_error(self):
+        song = Song()
+        song.name = "Café"  # 'é' will not encode as ASCII
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any(i.path == "song.name" for i in errors)
+
+    def test_song_name_pure_ascii_no_error(self):
+        song = Song()
+        song.name = "Cafe"
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR and i.path == "song.name"]
+        assert not errors
+
+    def test_instrument_name_non_ascii_error(self):
+        song = Song()
+        song.instruments[3] = Sampler(
+            common=SynthCommon(name="Café"),
+            sample_path="/k.wav",
+        )
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any(i.path == "instruments[3].name" for i in errors)
+
+    def test_sampler_sample_path_non_ascii_error(self):
+        song = Song()
+        song.instruments[0] = Sampler(
+            common=SynthCommon(name="ok"),
+            sample_path="/Café/k.wav",
+        )
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any(i.path == "instruments[0].sample_path" for i in errors)

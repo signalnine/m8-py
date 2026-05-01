@@ -9,7 +9,11 @@ class M8FileWriter:
         self._buf = bytearray()
 
     def write(self, byte: int) -> None:
-        self._buf.append(byte & 0xFF)
+        if byte < 0 or byte > 255:
+            raise M8ParseError(
+                f"byte {byte} out of range [0, 255] at offset {len(self._buf)}"
+            )
+        self._buf.append(byte)
 
     def write_bytes(self, data: bytes) -> None:
         self._buf.extend(data)

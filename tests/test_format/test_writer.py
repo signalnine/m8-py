@@ -9,6 +9,26 @@ def test_write_byte():
     w.write(0xFF)
     assert w.to_bytes() == bytes([0x42, 0xFF])
 
+
+def test_write_byte_negative_raises():
+    w = M8FileWriter()
+    with pytest.raises(M8ParseError, match="byte"):
+        w.write(-1)
+
+
+def test_write_byte_too_large_raises():
+    w = M8FileWriter()
+    with pytest.raises(M8ParseError, match="byte"):
+        w.write(256)
+
+
+def test_write_byte_accepts_full_range():
+    w = M8FileWriter()
+    w.write(0)
+    w.write(127)
+    w.write(255)
+    assert w.to_bytes() == bytes([0, 127, 255])
+
 def test_write_bytes():
     w = M8FileWriter()
     w.write_bytes(b"\x01\x02\x03")

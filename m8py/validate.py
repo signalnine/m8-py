@@ -33,30 +33,28 @@ def validate(song: Song) -> List[ValidationIssue]:
             f"tempo {song.tempo} out of range [1.0, 800.0]",
         ))
 
-    # Byte field ranges
-    if song.transpose > 255:
-        issues.append(ValidationIssue(
-            Severity.ERROR, "song.transpose",
-            f"transpose {song.transpose} exceeds byte range",
-        ))
-
-    if song.quantize > 255:
-        issues.append(ValidationIssue(
-            Severity.ERROR, "song.quantize",
-            f"quantize {song.quantize} exceeds byte range",
-        ))
-
-    if song.key > 255:
-        issues.append(ValidationIssue(
-            Severity.ERROR, "song.key",
-            f"key {song.key} exceeds byte range",
-        ))
+    # Byte field ranges (both bounds: write() truncated negatives to low byte
+    # and accepted >255, so validate must catch both before save).
+    for field_name in ("transpose", "quantize", "key"):
+        value = getattr(song, field_name)
+        if value < 0 or value > 255:
+            issues.append(ValidationIssue(
+                Severity.ERROR, f"song.{field_name}",
+                f"{field_name} {value} out of byte range [0, 255]",
+            ))
 
     # Song name length (12-byte field, no null terminator required)
     if len(song.name) > 12:
         issues.append(ValidationIssue(
             Severity.WARNING, "song.name",
             f"name '{song.name}' will be truncated to 12 characters",
+        ))
+
+    # Song name must encode cleanly as ASCII; writer is strict, validate fails fast.
+    if not _is_ascii(song.name):
+        issues.append(ValidationIssue(
+            Severity.ERROR, "song.name",
+            f"name {song.name!r} contains non-ASCII characters and will fail to save",
         ))
 
     # Song step chain references
@@ -95,4 +93,31 @@ def validate(song: Song) -> List[ValidationIssue]:
                 "Sampler instrument has empty sample_path",
             ))
 
+        # Instrument names must encode as ASCII or save() crashes.
+        inst_name = _instrument_name(inst)
+        if inst_name is not None and not _is_ascii(inst_name):
+            issues.append(ValidationIssue(
+                Severity.ERROR, f"instruments[{i}].name",
+                f"name {inst_name!r} contains non-ASCII characters and will fail to save",
+            ))
+
+        # Sample paths must also be ASCII.
+        if isinstance(inst, Sampler) and inst.sample_path and not _is_ascii(inst.sample_path):
+            issues.append(ValidationIssue(
+                Severity.ERROR, f"instruments[{i}].sample_path",
+                f"sample_path {inst.sample_path!r} contains non-ASCII characters and will fail to save",
+            ))
+
     return issues
+
+
+def _is_ascii(s: str) -> bool:
+    return all(ord(c) < 128 for c in s)
+
+
+def _instrument_name(inst) -> str | None:
+    """Return the displayable name of an instrument, or None for EmptyInstrument."""
+    common = getattr(inst, "common", None)
+    if common is not None:
+        return getattr(common, "name", None)
+    return getattr(inst, "name", None)

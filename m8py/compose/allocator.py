@@ -16,7 +16,7 @@ class _SlotPool:
     _next: int = 0
     _pinned: set[int] = field(default_factory=set)
     _allocated: dict[int, Any] = field(default_factory=dict)
-    _dedup_index: dict[int, int] | None = None  # hash -> slot
+    _dedup_index: dict[str, int] | None = None  # repr(obj) -> slot
 
     def enable_dedup(self) -> None:
         self._dedup_index = {}
@@ -67,9 +67,11 @@ class _SlotPool:
         return self.capacity - self.used
 
 
-def _obj_hash(obj: Any) -> int:
-    """Hash an object for deduplication. Uses repr for general-purpose hashing."""
-    return hash(repr(obj))
+def _obj_hash(obj: Any) -> str:
+    """Dedup key. Uses repr(obj) directly: hash collisions on distinct reprs
+    would otherwise silently merge slots and lose the second object's data.
+    """
+    return repr(obj)
 
 
 class SlotAllocator:

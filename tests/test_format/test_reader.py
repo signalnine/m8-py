@@ -38,6 +38,26 @@ def test_read_str_empty_ff_fill():
     r = M8FileReader(bytes([0xFF] * 12))
     assert r.read_str(12) == ""
 
+
+def test_read_str_high_bit_terminates():
+    # Bytes >= 0x80 must terminate the string the same way 0x00 / 0xFF do.
+    # Writer enforces ASCII so any high-bit byte means corrupted/foreign data.
+    r = M8FileReader(b"AB\xE9CD\x00\x00\x00\x00\x00\x00\x00")
+    assert r.read_str(12) == "AB"
+    # cursor advances by the full requested length
+    assert r.position() == 12
+
+
+def test_read_str_high_bit_at_offset_zero():
+    r = M8FileReader(b"\x80AB\x00")
+    assert r.read_str(4) == ""
+    assert r.position() == 4
+
+
+def test_read_str_pure_ascii_unchanged():
+    r = M8FileReader(b"M8\x00\x00")
+    assert r.read_str(4) == "M8"
+
 def test_read_float_le():
     data = struct.pack("<f", 120.0)
     r = M8FileReader(data)
