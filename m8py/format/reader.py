@@ -57,6 +57,10 @@ class M8FileReader:
         self._pos = offset
 
     def skip(self, n: int) -> None:
+        if n < 0 or self._pos + n > len(self._data):
+            raise M8ParseError(
+                f"skip {n} from offset {self._pos} out of bounds (size={len(self._data)})"
+            )
         self._pos += n
 
     def remaining(self) -> int:

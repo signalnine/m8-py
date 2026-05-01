@@ -2,7 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
-from m8py.format.constants import EMPTY
+from m8py.format.constants import EMPTY, STEPS_PER_PHRASE
+from m8py.format.errors import M8ParseError
 from m8py.models.fx import FX
 
 @dataclass
@@ -34,5 +35,9 @@ class Phrase:
         return Phrase(steps=[PhraseStep.from_reader(reader) for _ in range(16)])
 
     def write(self, writer: M8FileWriter) -> None:
+        if len(self.steps) != STEPS_PER_PHRASE:
+            raise M8ParseError(
+                f"Phrase must have {STEPS_PER_PHRASE} steps, got {len(self.steps)}"
+            )
         for s in self.steps:
             s.write(writer)

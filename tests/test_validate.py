@@ -176,3 +176,40 @@ class TestValidation:
         issues = validate(song)
         errors = [i for i in issues if i.severity == Severity.ERROR]
         assert any(i.path == "instruments[0].sample_path" for i in errors)
+
+    def test_tempo_nan_rejected(self):
+        # NaN compares False against any range bound — must be caught explicitly,
+        # otherwise validate() returns clean for an unsavable song.
+        song = Song()
+        song.tempo = float("nan")
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("tempo" in i.path for i in errors)
+
+    def test_tempo_inf_rejected(self):
+        song = Song()
+        song.tempo = float("inf")
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("tempo" in i.path for i in errors)
+
+    def test_phrase_step_note_negative_error(self):
+        song = Song()
+        song.phrases[2].steps[3] = PhraseStep(note=-1)
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("phrases[2].steps[3].note" in i.path for i in errors)
+
+    def test_phrase_step_velocity_overflow_error(self):
+        song = Song()
+        song.phrases[0].steps[0] = PhraseStep(velocity=300)
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("phrases[0].steps[0].velocity" in i.path for i in errors)
+
+    def test_chain_step_transpose_negative_error(self):
+        song = Song()
+        song.chains[1].steps[2] = ChainStep(phrase=EMPTY, transpose=-5)
+        issues = validate(song)
+        errors = [i for i in issues if i.severity == Severity.ERROR]
+        assert any("chains[1].steps[2].transpose" in i.path for i in errors)

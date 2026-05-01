@@ -2,7 +2,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
-from m8py.format.constants import EMPTY
+from m8py.format.constants import EMPTY, STEPS_PER_TABLE
+from m8py.format.errors import M8ParseError
 from m8py.models.fx import FX
 
 @dataclass
@@ -33,5 +34,9 @@ class Table:
         return Table(steps=[TableStep.from_reader(reader) for _ in range(16)])
 
     def write(self, writer: M8FileWriter) -> None:
+        if len(self.steps) != STEPS_PER_TABLE:
+            raise M8ParseError(
+                f"Table must have {STEPS_PER_TABLE} steps, got {len(self.steps)}"
+            )
         for s in self.steps:
             s.write(writer)

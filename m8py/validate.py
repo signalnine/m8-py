@@ -1,4 +1,5 @@
 from __future__ import annotations
+import math
 from dataclasses import dataclass
 from enum import Enum
 from typing import List
@@ -26,8 +27,9 @@ def validate(song: Song) -> List[ValidationIssue]:
     """Validate a Song and return a list of issues found."""
     issues: List[ValidationIssue] = []
 
-    # Tempo range
-    if song.tempo < 1.0 or song.tempo > 800.0:
+    # Tempo range. NaN compares False against any bound, so check it explicitly
+    # before the range test or float('nan') silently passes validation.
+    if math.isnan(song.tempo) or not (1.0 <= song.tempo <= 800.0):
         issues.append(ValidationIssue(
             Severity.ERROR, "song.tempo",
             f"tempo {song.tempo} out of range [1.0, 800.0]",
@@ -37,11 +39,24 @@ def validate(song: Song) -> List[ValidationIssue]:
     # and accepted >255, so validate must catch both before save).
     for field_name in ("transpose", "quantize", "key"):
         value = getattr(song, field_name)
-        if value < 0 or value > 255:
-            issues.append(ValidationIssue(
-                Severity.ERROR, f"song.{field_name}",
-                f"{field_name} {value} out of byte range [0, 255]",
-            ))
+        _check_byte(issues, f"song.{field_name}", field_name, value)
+
+    # PhraseStep byte fields - bypass writer's per-byte check by surfacing
+    # errors at validate time on a fully populated path.
+    for i, phrase in enumerate(song.phrases):
+        for j, ps in enumerate(phrase.steps):
+            _check_byte(issues, f"phrases[{i}].steps[{j}].note", "note", ps.note)
+            _check_byte(issues, f"phrases[{i}].steps[{j}].velocity", "velocity", ps.velocity)
+            _check_byte(
+                issues, f"phrases[{i}].steps[{j}].instrument", "instrument", ps.instrument
+            )
+
+    # ChainStep.transpose - phrase index is range-checked below as a reference.
+    for i, chain in enumerate(song.chains):
+        for j, cs in enumerate(chain.steps):
+            _check_byte(
+                issues, f"chains[{i}].steps[{j}].transpose", "transpose", cs.transpose
+            )
 
     # Song name length (12-byte field, no null terminator required)
     if len(song.name) > 12:
@@ -109,6 +124,14 @@ def validate(song: Song) -> List[ValidationIssue]:
             ))
 
     return issues
+
+
+def _check_byte(issues: List[ValidationIssue], path: str, name: str, value: int) -> None:
+    if not (0 <= value <= 255):
+        issues.append(ValidationIssue(
+            Severity.ERROR, path,
+            f"{name} {value} out of byte range [0, 255]",
+        ))
 
 
 def _is_ascii(s: str) -> bool:

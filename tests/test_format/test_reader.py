@@ -89,6 +89,27 @@ def test_skip():
     r.skip(2)
     assert r.read() == 0x02
 
+def test_skip_negative_raises():
+    # Negative skip silently rewinds the cursor and lets data be re-read.
+    r = M8FileReader(b"\x00\x01\x02\x03")
+    r.skip(2)
+    with pytest.raises(M8ParseError):
+        r.skip(-1)
+
+def test_skip_past_end_raises():
+    # Skipping past EOF leaves _pos in an undefined state and defers the error
+    # to the next read at a misleading offset.
+    r = M8FileReader(b"\x00\x01\x02\x03")
+    with pytest.raises(M8ParseError):
+        r.skip(100)
+
+def test_skip_to_exact_end_ok():
+    # Skipping to exactly len(data) is the valid "consumed everything" case.
+    r = M8FileReader(b"\x00\x01\x02\x03")
+    r.skip(4)
+    assert r.position() == 4
+    assert r.remaining() == 0
+
 def test_remaining():
     r = M8FileReader(b"\x00\x01\x02")
     assert r.remaining() == 3

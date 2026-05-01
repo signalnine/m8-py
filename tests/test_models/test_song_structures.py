@@ -1,3 +1,6 @@
+import pytest
+
+from m8py.format.errors import M8ParseError
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
 from m8py.format.constants import EMPTY
@@ -47,3 +50,46 @@ class TestSongStep:
         assert all(t == EMPTY for t in SongStep().tracks)
     def test_size(self):
         w = M8FileWriter(); SongStep().write(w); assert len(w.to_bytes()) == 8
+
+
+class TestStepLengthEnforcement:
+    """Phrase/Chain/Table/Groove each occupy a fixed number of steps in the
+    file format. Constructing one with a different step count and writing it
+    silently produces a wrong-sized section, which shifts every following
+    section's offset and corrupts the file."""
+
+    def test_phrase_with_wrong_step_count_raises(self):
+        p = Phrase(steps=[PhraseStep() for _ in range(15)])
+        w = M8FileWriter()
+        with pytest.raises(M8ParseError):
+            p.write(w)
+
+    def test_phrase_with_too_many_steps_raises(self):
+        p = Phrase(steps=[PhraseStep() for _ in range(17)])
+        w = M8FileWriter()
+        with pytest.raises(M8ParseError):
+            p.write(w)
+
+    def test_chain_with_wrong_step_count_raises(self):
+        c = Chain(steps=[ChainStep() for _ in range(15)])
+        w = M8FileWriter()
+        with pytest.raises(M8ParseError):
+            c.write(w)
+
+    def test_table_with_wrong_step_count_raises(self):
+        t = Table(steps=[TableStep() for _ in range(10)])
+        w = M8FileWriter()
+        with pytest.raises(M8ParseError):
+            t.write(w)
+
+    def test_groove_with_wrong_step_count_raises(self):
+        g = Groove(steps=[EMPTY] * 8)
+        w = M8FileWriter()
+        with pytest.raises(M8ParseError):
+            g.write(w)
+
+    def test_phrase_default_writes_correctly(self):
+        # Sanity: the default 16-step Phrase still works.
+        w = M8FileWriter()
+        Phrase().write(w)
+        assert len(w.to_bytes()) == 144
