@@ -3,6 +3,7 @@ from m8py.models.version import M8Version, VersionCapabilities, M8FileType
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
 from m8py.format.constants import HEADER_MAGIC
+from m8py.format.errors import M8ParseError
 
 def test_version_from_reader():
     data = HEADER_MAGIC + bytes([0x10, 0x04, 0x00, 0x10])
@@ -64,3 +65,36 @@ def test_caps_v4():
 def test_caps_v41():
     c = M8Version(4, 1, 0).caps
     assert c.has_eq and c.has_expanded_eq
+
+
+@pytest.mark.parametrize(
+    "major,minor,patch",
+    [
+        (16, 0, 0),
+        (0, 16, 0),
+        (0, 0, 16),
+        (255, 0, 0),
+        (-1, 0, 0),
+    ],
+)
+def test_write_header_rejects_out_of_range_components(major, minor, patch):
+    w = M8FileWriter()
+    version = M8Version(major, minor, patch)
+    with pytest.raises(M8ParseError, match="out of range"):
+        M8FileType.write_header(w, version)
+
+
+def test_from_reader_rejects_reserved_msb_high_nibble():
+    data = HEADER_MAGIC + bytes([0x10, 0x14, 0x00, 0x10])
+    r = M8FileReader(data)
+    with pytest.raises(M8ParseError, match="reserved high nibble"):
+        M8FileType.from_reader(r)
+
+
+def test_write_header_max_in_range_components_roundtrip():
+    w = M8FileWriter()
+    version = M8Version(15, 15, 15)
+    M8FileType.write_header(w, version)
+    r = M8FileReader(w.to_bytes())
+    v = M8FileType.from_reader(r)
+    assert v.major == 15 and v.minor == 15 and v.patch == 15

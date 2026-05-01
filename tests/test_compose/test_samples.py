@@ -96,3 +96,73 @@ class TestSampleExport:
         result = export_to_sdcard(song, tmp_path)
         assert result.song_path.exists()
         assert len(result.sample_files) == 0
+
+
+class TestSampleExportPathSafety:
+    @pytest.mark.parametrize(
+        "evil_path",
+        [
+            "../escape.wav",
+            "foo/../../bar.wav",
+            "..",
+            "../../etc/passwd",
+            "Samples/../../escape.wav",
+        ],
+    )
+    def test_sample_path_traversal_rejected(self, tmp_path, evil_path):
+        sample_file = tmp_path / "src.wav"
+        sample_file.write_bytes(b"RIFF" + b"\x00" * 50)
+        song = Song(name="Evil")
+        song.instruments[0] = Sampler(
+            common=SynthCommon(name="X"),
+            sample_path=evil_path,
+        )
+        sdcard = tmp_path / "sdcard"
+        with pytest.raises(M8ValidationError):
+            export_to_sdcard(
+                song, sdcard,
+                sample_sources={evil_path: str(sample_file)},
+            )
+
+    def test_sample_path_with_backslash_rejected(self, tmp_path):
+        song = Song(name="Win")
+        song.instruments[0] = Sampler(
+            common=SynthCommon(name="X"),
+            sample_path="..\\escape.wav",
+        )
+        with pytest.raises(M8ValidationError):
+            export_to_sdcard(
+                song, tmp_path / "sdcard",
+                sample_sources={"..\\escape.wav": str(tmp_path / "src.wav")},
+            )
+
+    @pytest.mark.parametrize(
+        "evil_name",
+        [
+            "../evil",
+            "foo/bar",
+            "..",
+        ],
+    )
+    def test_song_name_traversal_rejected(self, tmp_path, evil_name):
+        song = Song(name=evil_name)
+        with pytest.raises(M8ValidationError):
+            export_to_sdcard(song, tmp_path / "sdcard", dry_run=True)
+
+    def test_no_files_written_outside_sdcard_on_rejection(self, tmp_path):
+        """Even if validation runs partway, nothing should land outside sdcard."""
+        sentinel = tmp_path / "sentinel.wav"
+        sample_file = tmp_path / "src.wav"
+        sample_file.write_bytes(b"RIFF" + b"\x00" * 50)
+        song = Song(name="X")
+        song.instruments[0] = Sampler(
+            common=SynthCommon(name="X"),
+            sample_path="../sentinel.wav",
+        )
+        sdcard = tmp_path / "sdcard"
+        with pytest.raises(M8ValidationError):
+            export_to_sdcard(
+                song, sdcard,
+                sample_sources={"../sentinel.wav": str(sample_file)},
+            )
+        assert not sentinel.exists()

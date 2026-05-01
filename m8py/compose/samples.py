@@ -1,13 +1,42 @@
 from __future__ import annotations
+import os
 import shutil
 from dataclasses import dataclass, field
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Union
 
 from m8py.format.errors import M8ValidationError
 from m8py.io import save
 from m8py.models.instrument import Sampler
 from m8py.models.song import Song
+
+
+def _safe_join(base: Path, untrusted: str) -> Path:
+    """Join an untrusted relative path under base, rejecting traversal.
+
+    Rejects absolute paths, drive letters, backslash separators, and any
+    component equal to '..' or containing a NUL byte. The result is
+    guaranteed (post-resolve) to live under base.resolve().
+    """
+    if not untrusted:
+        raise M8ValidationError("path is empty")
+    if "\x00" in untrusted:
+        raise M8ValidationError(f"path contains NUL byte: {untrusted!r}")
+    cleaned = untrusted.lstrip("/")
+    if PurePosixPath(cleaned).is_absolute() or os.path.isabs(cleaned) or "\\" in cleaned:
+        raise M8ValidationError(f"path is not relative or contains backslash: {untrusted!r}")
+    parts = PurePosixPath(cleaned).parts
+    if any(p == ".." for p in parts):
+        raise M8ValidationError(f"path contains parent reference: {untrusted!r}")
+    base_resolved = base.resolve()
+    candidate = (base_resolved / cleaned).resolve()
+    try:
+        candidate.relative_to(base_resolved)
+    except ValueError:
+        raise M8ValidationError(
+            f"path escapes export root: {untrusted!r}"
+        ) from None
+    return candidate
 
 
 @dataclass
@@ -43,9 +72,17 @@ def export_to_sdcard(
     """
     sdcard = Path(sdcard_root)
     sample_sources = sample_sources or {}
-    result = ExportResult(song_path=sdcard / "Songs" / f"{song.name or 'Untitled'}.m8s")
+    raw_name = song.name or "Untitled"
+    if any(sep in raw_name for sep in ("/", "\\", "\x00")) or raw_name in ("..", "."):
+        raise M8ValidationError(
+            f"song.name contains path separator or is reserved: {raw_name!r}"
+        )
+    song_filename = f"{raw_name}.m8s"
+    songs_dir = _safe_join(sdcard, "Songs")
+    song_path = _safe_join(songs_dir, song_filename)
+    result = ExportResult(song_path=song_path)
 
-    # Collect sample paths from Sampler instruments
+    sample_dests: list[tuple[Sampler, Path]] = []
     for i, inst in enumerate(song.instruments):
         if not isinstance(inst, Sampler):
             continue
@@ -59,22 +96,23 @@ def export_to_sdcard(
                 f"but no source provided in sample_sources"
             )
 
-        dest = sdcard / m8_path.lstrip("/")
+        try:
+            dest = _safe_join(sdcard, m8_path)
+        except M8ValidationError as e:
+            raise M8ValidationError(
+                f"instrument[{i}]: unsafe sample_path: {e}"
+            ) from None
+        sample_dests.append((inst, dest))
         result.sample_files.append(dest)
 
     if dry_run:
         return result
 
-    # Create directories and write files
     result.song_path.parent.mkdir(parents=True, exist_ok=True)
     save(song, result.song_path)
 
-    for inst in song.instruments:
-        if not isinstance(inst, Sampler) or not inst.sample_path:
-            continue
-        m8_path = inst.sample_path
-        source = Path(sample_sources[m8_path])
-        dest = sdcard / m8_path.lstrip("/")
+    for inst, dest in sample_dests:
+        source = Path(sample_sources[inst.sample_path])
         dest.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(source, dest)
 

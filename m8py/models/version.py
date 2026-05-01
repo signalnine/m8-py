@@ -60,6 +60,10 @@ class M8FileType:
             raise M8ParseError(f"bad magic: expected {HEADER_MAGIC!r}, got {magic!r}")
         lsb = reader.read()
         msb = reader.read()
+        if msb & 0xF0:
+            raise M8ParseError(
+                f"reserved high nibble of version msb is nonzero: 0x{msb:02X}"
+            )
         major = msb & 0x0F
         minor = (lsb >> 4) & 0x0F
         patch = lsb & 0x0F
@@ -68,6 +72,16 @@ class M8FileType:
 
     @staticmethod
     def write_header(writer: M8FileWriter, version: M8Version) -> None:
+        for name, value in (
+            ("major", version.major),
+            ("minor", version.minor),
+            ("patch", version.patch),
+        ):
+            if not 0 <= value <= 0x0F:
+                raise M8ParseError(
+                    f"version.{name}={value} out of range; "
+                    f"each component must fit in 4 bits (0..15)"
+                )
         writer.write_bytes(HEADER_MAGIC)
         lsb = (version.minor << 4) | version.patch
         writer.write(lsb)
