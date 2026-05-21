@@ -82,6 +82,49 @@ class TestScale:
         assert s2.name == "CUSTOM"
         assert abs(s2.tuning - 440.0) < 0.01
 
+    def test_name_mutation_after_load_persists(self):
+        """m8-py-blk: mutating .name after load must reflect on write."""
+        s = Scale(name="ORIG")
+        w = M8FileWriter(); s.write(w, V41)
+        data1 = w.to_bytes()
+        s2 = Scale.from_reader(M8FileReader(data1), V41)
+        s2.name = "NEW_NAME"
+        w2 = M8FileWriter(); s2.write(w2, V41)
+        s3 = Scale.from_reader(M8FileReader(w2.to_bytes()), V41)
+        assert s3.name == "NEW_NAME"
+
+    def test_unchanged_name_byte_exact_roundtrip(self):
+        """m8-py-blk: writing back without mutation preserves exact bytes."""
+        s = Scale(name="MAJOR")
+        w = M8FileWriter(); s.write(w, V41)
+        data1 = w.to_bytes()
+        s2 = Scale.from_reader(M8FileReader(data1), V41)
+        # don't mutate
+        w2 = M8FileWriter(); s2.write(w2, V41)
+        assert w2.to_bytes() == data1
+
+    def test_from_reader_stops_at_high_bit(self):
+        """m8-py-l2j: high-bit bytes (>=0x80) terminate name parse like 0x00/0xFF."""
+        # 26-byte scale: note_enable(2) + 12 NoteIntervals(24) + name(16) + tuning(4) = 46
+        payload = bytearray()
+        payload.extend(b"\xff\x0f")  # note_enable
+        payload.extend(b"\x00" * 24)  # 12 NoteIntervals (each 2 bytes)
+        payload.extend(b"AB\xe9CD" + b"\x00" * 11)  # name: stops at 0xE9 -> "AB"
+        payload.extend(b"\x00" * 4)  # tuning
+        s = Scale.from_reader(M8FileReader(bytes(payload)), V41)
+        assert s.name == "AB"
+
+    def test_from_reader_cursor_advances_full_length_with_high_bit(self):
+        """m8-py-l2j: cursor still advances full 16 bytes even when name truncates early."""
+        payload = bytearray()
+        payload.extend(b"\xff\x0f")
+        payload.extend(b"\x00" * 24)
+        payload.extend(b"X\xe9" + b"\x00" * 14)
+        payload.extend(b"\x00\x00\x80\x3f")  # tuning = 1.0 float32 LE
+        s = Scale.from_reader(M8FileReader(bytes(payload)), V41)
+        assert s.name == "X"
+        assert abs(s.tuning - 1.0) < 0.001
+
 class TestEQBand:
     def test_size(self):
         w = M8FileWriter(); EQBand().write(w); assert len(w.to_bytes()) == 6

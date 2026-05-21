@@ -5,6 +5,7 @@ from typing import Union
 from m8py.compose.builder import SongBuilder
 from m8py.compose.notation import parse_pattern
 from m8py.format.constants import STEPS_PER_PHRASE
+from m8py.format.errors import M8ValidationError
 from m8py.models.instrument import Instrument
 from m8py.models.phrase import Phrase, PhraseStep
 from m8py.models.song import Song
@@ -50,6 +51,15 @@ def compose(
     Returns:
         A fully assembled Song.
     """
+    seen_tracks: set[int] = set()
+    for tdef in tracks:
+        if tdef.track in seen_tracks:
+            raise M8ValidationError(
+                f"compose(): track {tdef.track} is used by more than one TrackDef; "
+                f"each track column accepts a single chain at row 0"
+            )
+        seen_tracks.add(tdef.track)
+
     builder = SongBuilder(name=name, tempo=tempo, deduplicate=deduplicate)
 
     for tdef in tracks:

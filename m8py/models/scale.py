@@ -33,13 +33,7 @@ class Scale:
         note_enable = reader.read_u16_le()
         note_offsets = [NoteInterval.from_reader(reader) for _ in range(12)]
         _raw_name = reader.read_bytes(16)
-        # Parse name from raw bytes (stop at 0x00 or 0xFF)
-        chars = []
-        for b in _raw_name:
-            if b == 0x00 or b == 0xFF:
-                break
-            chars.append(chr(b))
-        name = "".join(chars)
+        name = _decode_scale_name(_raw_name)
         tuning = 0.0
         has_tuning = version is None or version.at_least(4, 0)
         if has_tuning:
@@ -52,10 +46,20 @@ class Scale:
         writer.write_u16_le(self.note_enable)
         for ni in self.note_offsets:
             ni.write(writer)
-        if self._raw_name is not None:
+        if (self._raw_name is not None
+                and _decode_scale_name(self._raw_name) == self.name):
             writer.write_bytes(self._raw_name)
         else:
             writer.write_str(self.name, 16)
         has_tuning = version is None or version.at_least(4, 0)
         if has_tuning:
             writer.write_float_le(self.tuning)
+
+
+def _decode_scale_name(raw: bytes) -> str:
+    chars = []
+    for b in raw:
+        if b == 0x00 or b == 0xFF or b >= 0x80:
+            break
+        chars.append(chr(b))
+    return "".join(chars)

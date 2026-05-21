@@ -140,3 +140,14 @@ class TestDeclarativeCompose:
         song = compose(tracks=[], name="Empty")
         assert isinstance(song, Song)
         assert song.name == "Empty"
+
+    def test_duplicate_track_raises(self):
+        """Two TrackDefs sharing the same track must raise (was: silent data loss)."""
+        from m8py.format.errors import M8ValidationError
+        with pytest.raises(M8ValidationError, match="track 0"):
+            compose(tracks=[
+                TrackDef(instrument=WavSynth(common=SynthCommon(name="BASS")),
+                         pattern="C3", track=0),
+                TrackDef(instrument=MacroSynth(common=SynthCommon(name="LEAD")),
+                         pattern="C5", track=0),
+            ])
