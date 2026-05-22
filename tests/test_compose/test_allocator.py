@@ -94,6 +94,18 @@ class TestSlotAllocator:
         with pytest.raises(ValueError):
             alloc.pin_phrase(N_PHRASES, Phrase())
 
+    def test_pin_already_pinned_slot_raises(self):
+        alloc = SlotAllocator()
+        alloc.pin_phrase(5, Phrase())
+        with pytest.raises(ValueError, match="already pinned"):
+            alloc.pin_phrase(5, Phrase())
+
+    def test_pin_already_allocated_slot_raises(self):
+        alloc = SlotAllocator()
+        slot = alloc.alloc_phrase(Phrase())
+        with pytest.raises(ValueError, match="already pinned"):
+            alloc.pin_phrase(slot, Phrase())
+
     def test_groove_allocation(self):
         alloc = SlotAllocator()
         assert alloc.alloc_groove(Groove()) == 0

@@ -1,5 +1,5 @@
 from __future__ import annotations
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from m8py.format.reader import M8FileReader
 from m8py.format.writer import M8FileWriter
 from m8py.format.constants import HEADER_MAGIC
@@ -13,7 +13,7 @@ class M8Version:
     major: int
     minor: int
     patch: int
-    _header_tail: bytes = b"\x00\x00"
+    _header_tail: bytes = field(default=b"\x00\x00", compare=False, repr=False)
 
     def at_least(self, major: int, minor: int) -> bool:
         return self.major > major or (self.major == major and self.minor >= minor)

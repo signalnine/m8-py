@@ -64,13 +64,24 @@ class SongBuilder:
         return self
 
     def add_phrase(self, phrase: Union[Phrase, str]) -> SongBuilder:
-        """Add a phrase (Phrase object or pattern string)."""
+        """Add a phrase (Phrase object or pattern string).
+
+        Raises:
+            ValueError: pattern string parses to more than STEPS_PER_PHRASE
+                steps. Use compose() for auto-splitting or split the pattern
+                manually across multiple add_phrase calls.
+        """
         if isinstance(phrase, str):
             steps = parse_pattern(phrase)
-            # Pad or truncate to 16 steps
+            if len(steps) > STEPS_PER_PHRASE:
+                raise ValueError(
+                    f"pattern parses to {len(steps)} steps, exceeds "
+                    f"STEPS_PER_PHRASE={STEPS_PER_PHRASE}. Use compose() "
+                    f"for auto-splitting or split the pattern manually."
+                )
             if len(steps) < STEPS_PER_PHRASE:
                 steps.extend([PhraseStep() for _ in range(STEPS_PER_PHRASE - len(steps))])
-            phrase = Phrase(steps=steps[:STEPS_PER_PHRASE])
+            phrase = Phrase(steps=steps)
         slot = self._alloc.alloc_phrase(phrase)
         self._song.phrases[slot] = phrase
         self._last_phrase = slot

@@ -47,6 +47,18 @@ def test_parse_velocity():
     assert steps[0].velocity == 0x7F
     assert steps[1].velocity == 0x40
 
+def test_parse_velocity_out_of_range_high():
+    with pytest.raises(ValueError, match="byte range"):
+        parse_pattern("C4@FFF")
+
+def test_parse_velocity_out_of_range_negative():
+    with pytest.raises(ValueError, match="byte range"):
+        parse_pattern("C4@-FF")
+
+def test_parse_velocity_max_in_range():
+    steps = parse_pattern("C4@FF")
+    assert steps[0].velocity == 0xFF
+
 def test_named_constants():
     from m8py.compose.notation import C4, A4, Fs3
     assert C4 == 60

@@ -23,7 +23,7 @@ def render_phrase(phrase, version=None, instrument_kind=None) -> str:
         fx1_str = format_fx(step.fx1, version=ver, instrument_kind=instrument_kind)
         fx2_str = format_fx(step.fx2, version=ver, instrument_kind=instrument_kind)
         fx3_str = format_fx(step.fx3, version=ver, instrument_kind=instrument_kind)
-        lines.append(f" {i:02X} {note_str} {vel_str}  {ins_str} {fx1_str} {fx2_str} {fx3_str}")
+        lines.append(f" {i:02X} {note_str:<4} {vel_str}  {ins_str} {fx1_str} {fx2_str} {fx3_str}")
     return "\n".join(lines)
 
 

@@ -98,3 +98,13 @@ def test_write_header_max_in_range_components_roundtrip():
     r = M8FileReader(w.to_bytes())
     v = M8FileType.from_reader(r)
     assert v.major == 15 and v.minor == 15 and v.patch == 15
+
+
+def test_version_equality_ignores_header_tail():
+    """A loaded version with arbitrary header_tail must equal a constructed
+    version with the same (major, minor, patch). _header_tail is an internal
+    roundtrip field, not part of the version identity.
+    """
+    v1 = M8Version(6, 5, 0)
+    v2 = M8Version(6, 5, 0, _header_tail=b"\x01\x02")
+    assert v1 == v2

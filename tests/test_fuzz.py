@@ -71,3 +71,23 @@ class TestFuzzModels:
             Theme.from_reader(reader)
         except M8Error:
             pass
+
+    @given(data=st.binary(min_size=46, max_size=46))
+    @settings(max_examples=100)
+    def test_random_scale_no_crash(self, data):
+        from m8py.models.scale import Scale
+        reader = M8FileReader(data)
+        try:
+            Scale.from_reader(reader, M8Version(4, 1, 0))
+        except M8Error:
+            pass
+
+    @given(data=st.binary(min_size=42, max_size=42))
+    @settings(max_examples=100)
+    def test_random_scale_no_version_no_crash(self, data):
+        from m8py.models.scale import Scale
+        reader = M8FileReader(data)
+        try:
+            Scale.from_reader(reader, M8Version(2, 5, 0))
+        except M8Error:
+            pass

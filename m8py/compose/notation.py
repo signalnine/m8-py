@@ -78,7 +78,14 @@ def parse_pattern(pattern: str) -> list[PhraseStep]:
         velocity = EMPTY
         if "@" in token:
             note_part, vel_hex = token.split("@", 1)
-            velocity = int(vel_hex, 16)
+            try:
+                velocity = int(vel_hex, 16)
+            except ValueError:
+                raise ValueError(f"invalid velocity hex {vel_hex!r} in {token!r}")
+            if not (0 <= velocity <= 0xFF):
+                raise ValueError(
+                    f"velocity {vel_hex!r} in {token!r} out of byte range 0x00..0xFF"
+                )
         else:
             note_part = token
 

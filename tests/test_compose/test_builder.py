@@ -138,3 +138,17 @@ class TestSongBuilder:
         song = SongBuilder().build()
         assert song.name == ""
         assert song.tempo == 120.0
+
+    def test_pattern_longer_than_phrase_raises(self):
+        """Pattern with more than STEPS_PER_PHRASE notes must raise rather
+        than silently truncate. Users should split manually or use compose().
+        """
+        long_pattern = " ".join(["C4"] * 17)
+        with pytest.raises(ValueError, match="exceeds STEPS_PER_PHRASE"):
+            SongBuilder().add_phrase(long_pattern)
+
+    def test_pattern_exactly_at_phrase_length_ok(self):
+        """A pattern at exactly STEPS_PER_PHRASE must not raise."""
+        pattern = " ".join(["C4"] * 16)
+        song = SongBuilder().add_phrase(pattern).build()
+        assert song.phrases[0].steps[15].note == 60

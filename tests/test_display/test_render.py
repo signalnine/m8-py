@@ -46,6 +46,18 @@ class TestRenderPhrase:
         result = render_phrase(p)
         assert "--- --" in result
 
+    def test_phrase_octave_10_alignment(self):
+        """MIDI 120-127 (octave 10) renders as 4-char note. Columns after the
+        note column must stay aligned with shorter notes on other rows.
+        """
+        p = Phrase()
+        p.steps[0] = PhraseStep(note=127)  # G-10, 4 chars
+        p.steps[1] = PhraseStep(note=60)   # C-5, 3 chars
+        lines = render_phrase(p).split("\n")
+        vel_col_row0 = lines[1].index("--")
+        vel_col_row1 = lines[2].index("--")
+        assert vel_col_row0 == vel_col_row1
+
 
 class TestRenderChain:
     def test_empty_chain(self):

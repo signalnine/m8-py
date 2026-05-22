@@ -25,6 +25,8 @@ class _SlotPool:
         """Reserve a specific slot."""
         if slot < 0 or slot >= self.capacity:
             raise ValueError(f"{self.name} slot {slot} out of range [0, {self.capacity})")
+        if slot in self._pinned or slot in self._allocated:
+            raise ValueError(f"{self.name} slot {slot} already pinned/allocated")
         self._pinned.add(slot)
         self._allocated[slot] = obj
         if self._dedup_index is not None:
